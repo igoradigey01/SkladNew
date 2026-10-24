@@ -1,0 +1,25 @@
+cd /mnt/developer/VS_Prodject/my_Sclad_v1/SkladNew
+
+# Создать .gitignore (если его нет)
+cat <<EOF > .gitignore
+# Build results
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# NuGet
+*.nupkg
+packages/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# App settings (если там пароли)
+appsettings.json
+EOF
