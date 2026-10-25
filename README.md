@@ -12,24 +12,60 @@
 Версия 4.1 добавила слой взаиморасчётов с клиентом: сделки, накладные и
 привязку платежей к сделке. Долг по сделке не хранится — он вычисляется.
 
+Версия 4.1.1 — та же схема с полями аудита (`СоздалId`, `ИзменилId`,
+`ДатаСоздания`, `ДатаИзменения`) во всех бизнес-таблицах и с бэкендом на
+ASP.NET Core 8: Identity живёт в `Sklad_v1_HR`, а EF Core автоматически
+заполняет аудит для транзакционных таблиц и основных справочников.
+
 ## Текущее состояние
 
-| | Версия 4.1 | Версия 4 | Версия 3 | Вариант 1 (архивный) |
+| | Версия 4.1.1 / 4.1 | Версия 4 | Версия 3 | Вариант 1 (архивный) |
 |---|------------|----------|----------|----------------------|
-| **БД** | `Sklad-v4.1` | `Sklad-v4` | `Sklad-v3` + `Sklad_v1_HR` | `SkladEtalon` |
-| **Идея** | ядро на `UETR` + характеристики по внешним стандартам + взаиморасчёты | ядро на `UETR` + характеристики по внешним стандартам | ядро на `UETR` + справочники эталона, кадры отдельно | эталон 1:1 с чисткой типов |
+| **БД** | `Sklad_v4.1.1` / `Sklad-v4.1` | `Sklad-v4` | `Sklad-v3` + `Sklad_v1_HR` | `SkladEtalon` |
+| **Идея** | ядро на `UETR` + характеристики по внешним стандартам + взаиморасчёты + аудит | ядро на `UETR` + характеристики по внешним стандартам | ядро на `UETR` + справочники эталона, кадры отдельно | эталон 1:1 с чисткой типов |
 | **Таблиц** | 19 + 4 представления | 17 + 1 представление | 15 в основной + 2 в кадровой | 22 (все как в эталоне) |
 | **Связь склад↔деньги** | явная, общий `UETR` + `КодСделки` | явная, общий `UETR` | явная, общий `UETR` | косвенная, как в эталоне |
 | **Связь склад↔кадры** | по `Guid` между базами (FK невозможен) | по `Guid` между базами (FK невозможен) | по `Guid` между базами (FK невозможен) | — |
 | **Характеристики** | тип значения, списки значений, наследование | тип значения, списки значений, наследование | простые свойства вида | как в эталоне |
 | **Взаиморасчёты** | сделки, накладные, платежи; долг вычисляется | — | — | долг хранится в метке |
-| **Промт** | — (см. [`client-settlement.md`](../docs/reference/client-settlement.md)) | [`prompts/03-variant-external-standards.md`](prompts/03-variant-external-standards.md) | [`prompts/02-variant-hybrid-uetr.md`](prompts/02-variant-hybrid-uetr.md) | [`prompts/01-variant-etalon-1to1.md`](prompts/01-variant-etalon-1to1.md) |
-| **Схема** | [`db/sklad_v4_1/database-schema.md`](db/sklad_v4_1/database-schema.md) | [`db/sklad_v4/database-schema.md`](db/sklad_v4/database-schema.md) | [`db/sklad_v3/database-schema.md`](db/sklad_v3/database-schema.md), [`db/sklad_v1_hr/database-schema.md`](db/sklad_v1_hr/database-schema.md) | [`db/variant1-etalon/database-schema.md`](db/variant1-etalon/database-schema.md) |
+| **Промт** | — (см. [`client-settlement.md`](../docs/reference/client-settlement.md)) | [`docs/prompts/03-variant-external-standards.md`](docs/prompts/03-variant-external-standards.md) | [`docs/prompts/02-variant-hybrid-uetr.md`](docs/prompts/02-variant-hybrid-uetr.md) | [`docs/prompts/01-variant-etalon-1to1.md`](docs/prompts/01-variant-etalon-1to1.md) |
+| **Схема** | [`db/sklad_v4_1_1/database-schema.md`](db/sklad_v4_1_1/database-schema.md), [`db/sklad_v4_1/database-schema.md`](db/sklad_v4_1/database-schema.md) | [`db/sklad_v4/database-schema.md`](db/sklad_v4/database-schema.md) | [`db/sklad_v3/database-schema.md`](db/sklad_v3/database-schema.md), [`db/sklad_v1_hr/database-schema.md`](db/sklad_v1_hr/database-schema.md) | [`db/variant1-etalon/database-schema.md`](db/variant1-etalon/database-schema.md) |
+
+## Версия 4.1.1: аудит и Identity
+
+`Sklad_v4.1.1` создаётся как **копия** `Sklad-v4.1` через `BACKUP` / `RESTORE`
+(данные, индексы, триггеры и представления сохраняются), после чего во все
+19 бизнес-таблиц добавляются колонки аудита:
+
+| Колонка | Тип | Правило |
+|---------|-----|---------|
+| `СоздалId` | `nvarchar(450)` NULL | `AspNetUsers.Id` создателя |
+| `ИзменилId` | `nvarchar(450)` NULL | `AspNetUsers.Id` изменившего |
+| `ДатаСоздания` | `datetime2` NOT NULL | DEFAULT `SYSUTCDATETIME()` |
+| `ДатаИзменения` | `datetime2` NULL | заполняется при изменении |
+
+Аудит в коде включён только там, где важна история сумм и остатков:
+
+| Группа | Таблицы | Аудит в EF |
+|--------|---------|------------|
+| 1. Транзакционные | `Приход`, `Расход`, `Деньги`, `НакладнаяРасход`, `Сделка`, `Расхождение`, `Ревизия` | да |
+| 2. Основные справочники | `Номенклатура`, `Клиент`, `Поставщик`, `Склад` | да |
+| 3. Вспомогательные | `ВидНоменклатуры`, `ГруппаНоменклатуры`, `ЕдИзмерения`, `КатегорияНоменклатуры`, `СписокЗначений`, `ТипЗначения`, `Характеристика`, `ЗначениеХарактеристики` | нет, колонки остаются `NULL` |
+
+Подробности — в [`db/sklad_v4_1_1/database-schema.md`](db/sklad_v4_1_1/database-schema.md).
+
+Пользователи API хранятся в `Sklad_v1_HR` (ASP.NET Identity). Учётка
+обязательно связана с карточкой сотрудника:
+
+- `AspNetUsers.СотрудникId` — `int NOT NULL`, FK → `Сотрудник.Id`,
+  `ON DELETE NO ACTION`;
+- уникальный индекс по `СотрудникId`: один сотрудник — одна учётка;
+- таблица `Сотрудник` помечена `ExcludeFromMigrations()` — EF её не создаёт.
 
 ## Как устроены базы
 
 ```
-Sklad-v4.1 (склад, версия 4.1)            Sklad_v1_HR (кадры)
+Sklad_v4.1.1 (склад, версия 4.1.1)          Sklad_v1_HR (кадры)
 ┌────────────────────────────────────────┐     ┌──────────────────────────┐
 │ Приход    UETR ─┐                       │     │ Сотрудник                │
 │ Расход    UETR ─┼─ СотрудникGuid ───────┼────►│   Id (PK)                │
@@ -56,11 +92,16 @@ Sklad-v4.1 (склад, версия 4.1)            Sklad_v1_HR (кадры)
 `Сделка → Деньги`. Долг по сделке вычисляется в `vw_БалансСделки`, а не
 хранится в таблице.
 
+С версии 4.1.1 в `Sklad_v1_HR` также живут таблицы ASP.NET Identity:
+`AspNetUsers.СотрудникId` — обязательный FK на `Сотрудник.Id`, поэтому учётка
+не может существовать без карточки сотрудника.
+
 ## Версии
 
 | Версия | БД | Что изменилось |
 |--------|----|----------------|
-| **v4.1** (новая) | `Sklad-v4.1` | Слой взаиморасчётов с клиентом: таблица `Сделка` (`КодСделки` PK, `НомерСделки` `R-000001` UNIQUE), шапка `НакладнаяРасход`, `Расход.НакладнаяId` (FK, `ON DELETE CASCADE`), `Деньги.КодСделки`, `Деньги.НомерДокумента`, у клиента `ДатаСоздания`/`Активен`. Долг не хранится: представления `vw_БалансСделки`, `vw_БалансКлиента`, `vw_ДвиженияПоСделке`. Триггеры согласованности клиента между сделкой, накладной, строкой и платежом |
+| **v4.1.1** (текущая) | `Sklad_v4.1.1` | Копия v4.1 + поля аудита (`СоздалId`, `ИзменилId`, `ДатаСоздания`, `ДатаИзменения`) во всех 19 таблицах. ASP.NET Core Identity в `Sklad_v1_HR`; EF-аудит для 7 транзакционных таблиц и 4 основных справочников. Backend на .NET 8 |
+| **v4.1** | `Sklad-v4.1` | Слой взаиморасчётов с клиентом: таблица `Сделка` (`КодСделки` PK, `НомерСделки` `R-000001` UNIQUE), шапка `НакладнаяРасход`, `Расход.НакладнаяId` (FK, `ON DELETE CASCADE`), `Деньги.КодСделки`, `Деньги.НомерДокумента`, у клиента `ДатаСоздания`/`Активен`. Долг не хранится: представления `vw_БалансСделки`, `vw_БалансКлиента`, `vw_ДвиженияПоСделке`. Триггеры согласованности клиента между сделкой, накладной, строкой и платежом |
 | **v4** | `Sklad-v4` | Система характеристик переделана по внешним стандартам: новая таблица `ТипЗначения` (тип атрибута: Text/Number/Date/Bool/List), новая таблица `СписокЗначений` (допустимые значения типа List), у `Характеристики` появились `ТипЗначенияId`, `Минимум`/`Максимум`, `МаксимальнаяДлина`, `Минимальная`/`МаксимальнаяДата`, `ЗначениеПоУмолчанию`, `Описание`, `Активен`, `ДатаСоздания`; у `ЗначениеХарактеристики` — `ДатаИзменения`; у `ВидНоменклатуры` — `Активен`, `ДатаСоздания`. Добавлены представление `vw_ЗначенияХарактеристик` (эффективное значение) и 3 триггера проверки значений по типу |
 | **v3** | `Sklad-v3` | Справочник номенклатуры расширен: `Guid` и `Код` (оба UNIQUE), `Артикул`, `КраткоеНаписание`, `ГруппаId`, `КатегорияId`, `ТипId`, три цены (закупочная/продажная/оптовая), складские параметры (`МинимальныйОстаток`, `МаксимальныйОстаток`, `СрокГодности`, `СтранаПроисхождения`), `Фото`, `Описание`, `Активен`, даты. Новые таблицы `ГруппаНоменклатуры` (дерево) и `КатегорияНоменклатуры`; характеристики принадлежат виду номенклатуры |
 | **v2** | `Sklad-v2` | Справочники приведены к внутренним стандартам: `Материал` → `ВидНоменклатуры`, `АтрибутМатериала` → `Характеристика`, `ХарактеристикаНоменклатуры` → `ЗначениеХарактеристики`; убрана упаковка |
@@ -90,6 +131,10 @@ Sklad-v4.1 (склад, версия 4.1)            Sklad_v1_HR (кадры)
 | Отгружено / оплачено | 41 886 625,50 / 42 268 515,00 | — | — | 41 886 625,50 / 42 268 515,00 |
 | Долг по сделкам | −381 889,50 | — | — | −381 889,50 |
 
+`Sklad_v4.1.1` — копия `Sklad-v4.1` по данным: количество строк во всех
+19 таблицах совпадает, добавлены только колонки аудита. `verify-audit.sql`
+проверяет это автоматически и падает при любом расхождении.
+
 `SkladEtalon` и `Sklad_v1`/`Sklad-v2` в текущем контейнере не развёрнуты —
 их скрипты лежат в `db/`, базу можно поднять по инструкции ниже.
 
@@ -102,6 +147,7 @@ sqlcmd -S localhost -E -f 65001 -b -i create-database.sql
 sqlcmd -S localhost -E -f 65001 -b -i create-tables.sql
 sqlcmd -S localhost -E -f 65001 -b -i create-indexes.sql
 sqlcmd -S localhost -E -f 65001 -b -i insert-reference-data.sql
+sqlcmd -S localhost -E -f 65001 -b -i create-identity-tables.sql
 
 # основная база, версия 4.1 (создаётся с нуля;
 # v4 рядом нужна только для сверки контрольных сумм)
@@ -115,6 +161,12 @@ sqlcmd -S localhost -E -f 65001 -b -i insert-reference-data.sql
 sqlcmd -S localhost -E -f 65001 -b -i migrate-movements-from-Sh_29-06-25.sql
 sqlcmd -S localhost -E -f 65001 -b -i migrate-settlements-from-Sh_29-06-25.sql
 sqlcmd -S localhost -E -f 65001 -b -i verify-data.sql
+
+# основная база, версия 4.1.1 — копия v4.1 + аудит
+cd ../sklad_v4_1_1
+sqlcmd -S localhost -E -f 65001 -b -i create-database.sql
+sqlcmd -S localhost -E -f 65001 -b -i add-audit-columns.sql
+sqlcmd -S localhost -E -f 65001 -b -i verify-audit.sql
 
 # основная база, версия 4
 cd ../sklad_v4
@@ -159,23 +211,97 @@ docker exec mssql_dev /opt/mssql-tools18/bin/sqlcmd \
 Миграция данных требует, чтобы эталон и целевая база лежали на одном экземпляре
 (переливка идёт через `[Sh_29-06-25].dbo.*`).
 
+## Backend
+
+Бэкенд — ASP.NET Core 8 Web API в `backend/src/SkladApi`:
+
+| Слой | Что внутри |
+|------|------------|
+| `Data/SkladContext.cs` | 11 EF-моделей `Sklad_v4.1.1` + автозаполнение аудита в `SaveChanges`/`SaveChangesAsync` |
+| `Data/HRContext.cs` | ASP.NET Identity + `Сотрудник`, обязательный FK `AspNetUsers.СотрудникId` |
+| `Data/Migrations/` | миграция `InitialIdentity` и snapshot |
+| `Models/` | `IAuditable`, `AuditableEntity`, 11 сущностей, `ApplicationUser`, `Сотрудник` |
+| `Program.cs` | DI обоих контекстов, Identity, Swagger |
+
+Пакеты: `Microsoft.EntityFrameworkCore.SqlServer` 8.0.6,
+`Microsoft.AspNetCore.Identity.EntityFrameworkCore` 8.0.6, `Dapper` 2.1.89,
+`Swashbuckle.AspNetCore` 6.6.2. Версия `dotnet-ef` закреплена в
+`backend/.config/dotnet-tools.json`.
+
+### Запуск
+
+Нужен .NET SDK 8. Строки подключения **не коммитятся**: `appsettings.json`
+в `.gitignore`, реальные значения — в User Secrets.
+
+```bash
+cd SkladNew/backend/src/SkladApi
+
+# один раз: строки подключения в User Secrets
+dotnet user-secrets init
+dotnet user-secrets set "ConnectionStrings:SkladDb" \
+  "Server=192.168.43.14,1433;Database=Sklad_v4.1.1;User Id=sa;Password=<пароль>;TrustServerCertificate=True;"
+dotnet user-secrets set "ConnectionStrings:HRDb" \
+  "Server=192.168.43.14,1433;Database=Sklad_v1_HR;User Id=sa;Password=<пароль>;TrustServerCertificate=True;"
+
+# сборка и запуск
+cd ../..
+dotnet build
+dotnet run --project src/SkladApi
+```
+
+Swagger: <http://localhost:5240/swagger/index.html>.
+
+Если строк подключения нет, приложение падает с понятным сообщением, а не
+пытается подключиться к `localhost`.
+
+### Identity и миграции
+
+```bash
+cd SkladNew/backend
+
+# применить схему Identity к Sklad_v1_HR
+dotnet tool restore
+dotnet tool run dotnet-ef database update \
+  --project src/SkladApi --startup-project src/SkladApi --context HRContext
+
+# пересоздать идемпотентный SQL-скрипт после изменения модели
+dotnet tool run dotnet-ef migrations script --idempotent \
+  --project src/SkladApi --startup-project src/SkladApi --context HRContext \
+  -o ../db/sklad_v1_hr/create-identity-tables.sql
+```
+
+`SkladContext` намеренно **не** управляется миграциями: схема `Sklad_v4.1.1`
+создаётся SQL-скриптами, а EF-модели только читают и пишут данные.
+
 ## Структура
 
 ```
 SkladNew/
 ├── README.md
-├── prompts/
-│   ├── 01-variant-etalon-1to1.md      вариант 1: эталон 1:1 с чисткой типов
-│   ├── 02-variant-hybrid-uetr.md      рабочая схема: ядро на UETR + две базы
-│   └── 03-variant-external-standards.md версия 4: характеристики по внешним стандартам
+├── backend/
+│   ├── SkladNew.sln
+│   ├── .config/dotnet-tools.json      локальный dotnet-ef 8.0.6
+│   └── src/SkladApi/
+│       ├── Data/                      SkladContext, HRContext, Migrations
+│       ├── Models/                    сущности, IAuditable, Identity
+│       └── Program.cs                 DI, Identity, Swagger
+├── docs/
+│   ├── prompts/
+│   │   ├── 01-variant-etalon-1to1.md      вариант 1: эталон 1:1 с чисткой типов
+│   │   ├── 02-variant-hybrid-uetr.md      рабочая схема: ядро на UETR + две базы
+│   │   └── 03-variant-external-standards.md версия 4: характеристики по внешним стандартам
+│   └── tasks/
+│       ├── 01-identity-setup.md
+│       └── 02-audit-trail-implementation.md
 └── db/
-    ├── sklad_v4_1/                    версия 4.1, основная база `Sklad-v4.1` (новая)
-    ├── sklad_v4/                      версия 4, основная база `Sklad-v4`
-    ├── sklad_v3/                      версия 3, основная база `Sklad-v3`
-    ├── sklad_v2/                      версия 2, база `Sklad-v2`
-    ├── sklad_v1/                      версия 1, база `Sklad_v1`
-    ├── sklad_v1_hr/                   кадровая база `Sklad_v1_HR` (общая)
-    └── variant1-etalon/               вариант 1, база `SkladEtalon`
+    ├── sklad_v4_1_1/                 версия 4.1.1, основная база `Sklad_v4.1.1` + аудит (текущая)
+    ├── sklad_v4_1/                   версия 4.1, основная база `Sklad-v4.1`
+    ├── sklad_v4/                     версия 4, основная база `Sklad-v4`
+    ├── sklad_v3/                     версия 3, основная база `Sklad-v3`
+    ├── sklad_v2/                     версия 2, база `Sklad-v2`
+    ├── sklad_v1/                     версия 1, база `Sklad_v1`
+    ├── sklad_v1_hr/                  кадровая база `Sklad_v1_HR` (общая) + Identity
+    └── variant1-etalon/              вариант 1, база `SkladEtalon`
 ```
 
 ## Что было найдено в эталоне по дороге
@@ -205,7 +331,8 @@ SkladNew/
 - **Логика эталона** (9 процедур, 3 представления): остатки, долг клиента,
   отгрузки, поставки, итоги аудита. В варианте 1 они остаются в БД как есть,
   в рабочей схеме переносятся в запросы приложения — перечень в промте 02.
-- **Backend и frontend**: .NET 8 + Dapper, API, Angular.
+- **Frontend**: Angular — не начат. Бэкенд-каркас (Identity, EF-аудит,
+  Swagger) готов, бизнес-эндпоинтов пока нет.
 - **Наполнение новых справочников**: у 198 позиций номенклатуры не заполнены
   `Артикул`, `ЦенаЗакупочная`, `ЦенаОптовая`, складские параметры, `Фото` —
   в эталоне их не было.

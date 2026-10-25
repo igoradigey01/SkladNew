@@ -1,25 +1,132 @@
-cd /mnt/developer/VS_Prodject/my_Sclad_v1/SkladNew
+# ============================================
+# ASP.NET Core / .NET 8
+# ============================================
 
-# Создать .gitignore (если его нет)
-cat <<EOF > .gitignore
 # Build results
 [Bb]in/
 [Oo]bj/
 [Ll]og/
+[Ll]ogs/
+artifacts/
+publish/
+[Pp]ublish/
 
 # Visual Studio
 .vs/
 *.user
 *.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+*.cache
+
+# User Secrets (критично!)
+secrets.json
+*.secrets.json
+
+# Configuration
+appsettings.json
+appsettings.*.json
+!appsettings.Development.json
+appsettings.local.json
+*.config.backup
+
+# Generated files
+*.AssemblyInfo.cs
+*.generated.cs
+*.g.cs
+*.g.i.cs
 
 # NuGet
 *.nupkg
 packages/
+!packages/repositories.config
 
-# OS
-.DS_Store
+# Compiled files
+*.dll
+*.exe
+*.pdb
+*.mdb
+*.lib
+*.obj
+*.o
+*.so
+*.dylib
+
+# ============================================
+# Entity Framework Core / Базы данных
+# ============================================
+*.mdf
+*.ldf
+*.ndf
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.bak
+*.trn
+
+# ============================================
+# Docker
+# ============================================
+*.pid
+*.seed
+.docker/
+docker-compose.override.yml
+
+# ============================================
+# IDE
+# ============================================
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ============================================
+# ReSharper
+# ============================================
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# ============================================
+# Windows
+# ============================================
 Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
 
-# App settings (если там пароли)
-appsettings.json
-EOF
+# ============================================
+# Temp
+# ============================================
+*.tmp
+*.bak
+*.log
+
+# ============================================
+# 1С (legacy)
+# ============================================
+*.ER1
+*.er1
+*.BK1
+*.1CD
+*.1cd
+
+# ============================================
+# Test data
+# ============================================
+*.local.*
+*.test.local.*
+test-data/
+
+# ============================================
+# Certificates (критично!)
+# ============================================
+*.pfx
+*.cer
+*.crt
+*.key
+*.pem

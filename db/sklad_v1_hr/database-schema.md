@@ -26,12 +26,14 @@
 | `create-tables.sql` | `Специальность` и `Сотрудник` |
 | `create-indexes.sql` | Индексы по специальности и ФИО |
 | `insert-reference-data.sql` | 6 специальностей и демо-сотрудник |
+| `create-identity-tables.sql` | Таблицы ASP.NET Identity + связь `AspNetUsers.СотрудникId` (генерируется EF Core) |
 
 ```bash
 sqlcmd -S localhost -E -f 65001 -b -i create-database.sql
 sqlcmd -S localhost -E -f 65001 -b -i create-tables.sql
 sqlcmd -S localhost -E -f 65001 -b -i create-indexes.sql
 sqlcmd -S localhost -E -f 65001 -b -i insert-reference-data.sql
+sqlcmd -S localhost -E -f 65001 -b -i create-identity-tables.sql
 ```
 
 ## ER-диаграмма
@@ -72,6 +74,46 @@ erDiagram
 |---------|-----|-------------|
 | `Id` | `int` | IDENTITY, PK, NOT NULL |
 | `Название` | `nvarchar(50)` | UNIQUE, NOT NULL |
+
+## ASP.NET Identity
+
+Пользователи API хранятся в этой же базе. Схема создаётся EF-миграцией
+`InitialIdentity` и продублирована идемпотентным скриптом
+`create-identity-tables.sql`, чтобы базу можно было поднять без .NET SDK.
+
+Стандартные таблицы: `AspNetUsers`, `AspNetRoles`, `AspNetUserRoles`,
+`AspNetUserClaims`, `AspNetRoleClaims`, `AspNetUserLogins`,
+`AspNetUserTokens`, `__EFMigrationsHistory`.
+
+Отличие от стандартной схемы — обязательная связь учётки с сотрудником:
+
+| Колонка `AspNetUsers` | Тип | Ограничения |
+|-----------------------|-----|-------------|
+| `СотрудникId` | `int` | NOT NULL, UNIQUE, FK → `Сотрудник.Id`, `ON DELETE NO ACTION` |
+| `Фио` | `nvarchar(200)` | NULL — денормализованное ФИО для списков |
+
+Правила:
+
+- **Учётка без сотрудника невозможна** — `СотрудникId` обязателен.
+- **Один сотрудник — одна учётка** — уникальный индекс
+  `IX_AspNetUsers_СотрудникId`.
+- **Сотрудника с учёткой нельзя удалить** — `ON DELETE NO ACTION`; сначала
+  удаляется или переносится учётка.
+- Таблица `Сотрудник` помечена `ExcludeFromMigrations()`: EF её не создаёт и
+  не удаляет, потому что она уже есть в скриптах.
+
+Применить схему:
+
+```bash
+# через EF (нужны User Secrets со строкой подключения HRDb)
+cd SkladNew/backend
+dotnet tool run dotnet-ef database update \
+  --project src/SkladApi --startup-project src/SkladApi --context HRContext
+
+# или чистым SQL
+sqlcmd -S localhost -U sa -P '<пароль>' -C -f 65001 -b -i create-identity-tables.sql
+```
+
 ## Данные
 
 В эталоне `Sh_29-06-25` кадровых таблиц нет — это складской модуль, поэтому
