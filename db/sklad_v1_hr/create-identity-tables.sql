@@ -219,3 +219,28 @@ GO
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+GO
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261027092146_AddUserCreatedAt'
+)
+BEGIN
+    ALTER TABLE [AspNetUsers] ADD [ДатаСоздания] datetime2 NOT NULL DEFAULT (SYSUTCDATETIME());
+END;
+GO
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261027092146_AddUserCreatedAt'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261027092146_AddUserCreatedAt', N'8.0.6');
+END;
+GO
+
+COMMIT;
+GO
+

@@ -28,6 +28,7 @@ secrets.json
 appsettings.json
 appsettings.*.json
 !appsettings.Development.json
+!appsettings.example.json
 appsettings.local.json
 *.config.backup
 

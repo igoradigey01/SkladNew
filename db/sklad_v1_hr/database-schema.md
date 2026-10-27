@@ -77,8 +77,8 @@ erDiagram
 
 ## ASP.NET Identity
 
-Пользователи API хранятся в этой же базе. Схема создаётся EF-миграцией
-`InitialIdentity` и продублирована идемпотентным скриптом
+Пользователи API хранятся в этой же базе. Схема создаётся EF-миграциями
+`InitialIdentity` и `AddUserCreatedAt` и продублирована идемпотентным скриптом
 `create-identity-tables.sql`, чтобы базу можно было поднять без .NET SDK.
 
 Стандартные таблицы: `AspNetUsers`, `AspNetRoles`, `AspNetUserRoles`,
@@ -91,6 +91,7 @@ erDiagram
 |-----------------------|-----|-------------|
 | `СотрудникId` | `int` | NOT NULL, UNIQUE, FK → `Сотрудник.Id`, `ON DELETE NO ACTION` |
 | `Фио` | `nvarchar(200)` | NULL — денормализованное ФИО для списков |
+| `ДатаСоздания` | `datetime2` | NOT NULL, DEFAULT `SYSUTCDATETIME()` |
 
 Правила:
 
@@ -108,7 +109,7 @@ erDiagram
 # через EF (нужны User Secrets со строкой подключения HRDb)
 cd SkladNew/backend
 dotnet tool run dotnet-ef database update \
-  --project src/SkladApi --startup-project src/SkladApi --context HRContext
+  --project SkladApi --startup-project SkladApi --context HRContext
 
 # или чистым SQL
 sqlcmd -S localhost -U sa -P '<пароль>' -C -f 65001 -b -i create-identity-tables.sql

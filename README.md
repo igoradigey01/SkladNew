@@ -213,18 +213,22 @@ docker exec mssql_dev /opt/mssql-tools18/bin/sqlcmd \
 
 ## Backend
 
-Бэкенд — ASP.NET Core 8 Web API в `backend/src/SkladApi`:
+Бэкенд — ASP.NET Core 8 Web API. Решение — `backend/SkladApi.sln`, проекты:
 
-| Слой | Что внутри |
-|------|------------|
-| `Data/SkladContext.cs` | 11 EF-моделей `Sklad_v4.1.1` + автозаполнение аудита в `SaveChanges`/`SaveChangesAsync` |
-| `Data/HRContext.cs` | ASP.NET Identity + `Сотрудник`, обязательный FK `AspNetUsers.СотрудникId` |
-| `Data/Migrations/` | миграция `InitialIdentity` и snapshot |
-| `Models/` | `IAuditable`, `AuditableEntity`, 11 сущностей, `ApplicationUser`, `Сотрудник` |
-| `Program.cs` | DI обоих контекстов, Identity, Swagger |
+| Проект | Что внутри |
+|--------|------------|
+| `SkladApi` | Web API: `Program.cs`, DI, Identity, Swagger, контроллеры |
+| `SkladDB` | `SkladContext`, 11 EF-моделей `Sklad_v4.1.1`, `IAuditable`, `ICurrentUserService` |
+| `HRDB` | ASP.NET Identity, `ApplicationUser`, `Сотрудник`, `HRContext`, миграции |
+| `EmailService` | SMTP-отправка на MailKit, `EmailSettings`, `IEmailSender` |
+
+`HRDB` зависит только от EF Core и Identity; `SkladDB` от Identity не зависит —
+текущего пользователя для аудита отдаёт `ICurrentUserService`, реализация
+которого живёт в `SkladApi`.
 
 Пакеты: `Microsoft.EntityFrameworkCore.SqlServer` 8.0.6,
-`Microsoft.AspNetCore.Identity.EntityFrameworkCore` 8.0.6, `Dapper` 2.1.89,
+`Microsoft.AspNetCore.Identity.EntityFrameworkCore` 8.0.6 (в `HRDB`),
+`Dapper` 2.1.89 (в `SkladDB`), `MailKit` 4.18.2 (в `EmailService`),
 `Swashbuckle.AspNetCore` 6.6.2. Версия `dotnet-ef` закреплена в
 `backend/.config/dotnet-tools.json`.
 
@@ -234,7 +238,7 @@ docker exec mssql_dev /opt/mssql-tools18/bin/sqlcmd \
 в `.gitignore`, реальные значения — в User Secrets.
 
 ```bash
-cd SkladNew/backend/src/SkladApi
+cd SkladNew/backend/SkladApi
 
 # один раз: строки подключения в User Secrets
 dotnet user-secrets init
@@ -244,9 +248,9 @@ dotnet user-secrets set "ConnectionStrings:HRDb" \
   "Server=192.168.43.14,1433;Database=Sklad_v1_HR;User Id=sa;Password=<пароль>;TrustServerCertificate=True;"
 
 # сборка и запуск
-cd ../..
+cd ..
 dotnet build
-dotnet run --project src/SkladApi
+dotnet run --project SkladApi
 ```
 
 Swagger: <http://localhost:5240/swagger/index.html>.
@@ -262,11 +266,11 @@ cd SkladNew/backend
 # применить схему Identity к Sklad_v1_HR
 dotnet tool restore
 dotnet tool run dotnet-ef database update \
-  --project src/SkladApi --startup-project src/SkladApi --context HRContext
+  --project HRDB --startup-project SkladApi --context HRContext
 
 # пересоздать идемпотентный SQL-скрипт после изменения модели
 dotnet tool run dotnet-ef migrations script --idempotent \
-  --project src/SkladApi --startup-project src/SkladApi --context HRContext \
+  --project HRDB --startup-project SkladApi --context HRContext \
   -o ../db/sklad_v1_hr/create-identity-tables.sql
 ```
 
@@ -279,12 +283,19 @@ dotnet tool run dotnet-ef migrations script --idempotent \
 SkladNew/
 ├── README.md
 ├── backend/
-│   ├── SkladNew.sln
+│   ├── SkladApi.sln
 │   ├── .config/dotnet-tools.json      локальный dotnet-ef 8.0.6
-│   └── src/SkladApi/
-│       ├── Data/                      SkladContext, HRContext, Migrations
-│       ├── Models/                    сущности, IAuditable, Identity
-│       └── Program.cs                 DI, Identity, Swagger
+│   ├── SkladApi/                      Web API, Swagger
+│   │   ├── Services/                  HttpCurrentUserService
+│   │   └── Program.cs
+│   ├── SkladDB/                       слой бизнес-данных
+│   │   ├── Data/                      SkladContext
+│   │   ├── Models/                    11 сущностей, IAuditable
+│   │   └── Services/                  ICurrentUserService
+│   ├── HRDB/                          Identity, сотрудники, миграции
+│   │   ├── Data/                      HRContext, Migrations
+│   │   └── Models/                    ApplicationUser, Сотрудник
+│   └── EmailService/                  SMTP: EmailSettings, IEmailSender, MailKit
 ├── docs/
 │   ├── prompts/
 │   │   ├── 01-variant-etalon-1to1.md      вариант 1: эталон 1:1 с чисткой типов
