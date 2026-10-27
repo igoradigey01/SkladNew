@@ -213,7 +213,7 @@ docker exec mssql_dev /opt/mssql-tools18/bin/sqlcmd \
 
 ## Backend
 
-Бэкенд — ASP.NET Core 8 Web API. Решение — `backend/SkladApi.sln`, проекты:
+Бэкенд — ASP.NET Core 8 Web API. Решение — `SkladX01/SkladX01.sln`, проекты:
 
 | Проект | Что внутри |
 |--------|------------|
@@ -230,7 +230,7 @@ docker exec mssql_dev /opt/mssql-tools18/bin/sqlcmd \
 `Microsoft.AspNetCore.Identity.EntityFrameworkCore` 8.0.6 (в `HRDB`),
 `Dapper` 2.1.89 (в `SkladDB`), `MailKit` 4.18.2 (в `EmailService`),
 `Swashbuckle.AspNetCore` 6.6.2. Версия `dotnet-ef` закреплена в
-`backend/.config/dotnet-tools.json`.
+`SkladX01/.config/dotnet-tools.json`.
 
 ### Запуск
 
@@ -238,7 +238,7 @@ docker exec mssql_dev /opt/mssql-tools18/bin/sqlcmd \
 в `.gitignore`, реальные значения — в User Secrets.
 
 ```bash
-cd SkladNew/backend/SkladApi
+cd SkladNew/SkladX01/SkladApi
 
 # один раз: строки подключения в User Secrets
 dotnet user-secrets init
@@ -261,7 +261,7 @@ Swagger: <http://localhost:5240/swagger/index.html>.
 ### Identity и миграции
 
 ```bash
-cd SkladNew/backend
+cd SkladNew/SkladX01
 
 # применить схему Identity к Sklad_v1_HR
 dotnet tool restore
@@ -282,8 +282,8 @@ dotnet tool run dotnet-ef migrations script --idempotent \
 ```
 SkladNew/
 ├── README.md
-├── backend/
-│   ├── SkladApi.sln
+├── SkladX01/
+│   ├── SkladX01.sln
 │   ├── .config/dotnet-tools.json      локальный dotnet-ef 8.0.6
 │   ├── SkladApi/                      Web API, Swagger
 │   │   ├── Services/                  HttpCurrentUserService

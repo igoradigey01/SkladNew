@@ -22,7 +22,7 @@ ASP.NET Core: вложения передаются байтами, поэтом
 Пароль **не** хранится в репозитории. В API используйте User Secrets:
 
 ```bash
-cd SkladNew/backend/SkladApi
+cd SkladNew/SkladX01/SkladApi
 dotnet user-secrets set "EmailSettings:From" "noreply@example.com"
 dotnet user-secrets set "EmailSettings:SmtpServer" "smtp.example.com"
 dotnet user-secrets set "EmailSettings:Port" "587"

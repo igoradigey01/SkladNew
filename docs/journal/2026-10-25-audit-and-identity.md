@@ -19,7 +19,7 @@
   совпадение количества строк с `Sklad-v4.1`; при расхождении завершается
   ошибкой.
 
-### Backend `backend/SkladApi` + `backend/SkladDB`
+### Backend `SkladX01/SkladApi` + `SkladX01/SkladDB`
 
 - ASP.NET Core 8 Web API, пакеты EF Core 8.0.6, Identity, Dapper, Swagger.
 - `SkladContext` — 11 EF-моделей (Группы 1 и 2) и автозаполнение аудита в

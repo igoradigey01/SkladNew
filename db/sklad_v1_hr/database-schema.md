@@ -107,7 +107,7 @@ erDiagram
 
 ```bash
 # через EF (нужны User Secrets со строкой подключения HRDb)
-cd SkladNew/backend
+cd SkladNew/SkladX01
 dotnet tool run dotnet-ef database update \
   --project SkladApi --startup-project SkladApi --context HRContext
 

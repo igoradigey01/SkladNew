@@ -9,8 +9,8 @@ HR-контекст проверен и считается выполненны�
 ## Структура
 
 ```
-backend/
-├── SkladApi.sln
+SkladX01/
+├── SkladX01.sln
 ├── SkladApi/       Web API, DI, Swagger, HttpCurrentUserService
 ├── SkladDB/        SkladContext, 11 моделей, IAuditable, ICurrentUserService
 ├── HRDB/           Identity, ApplicationUser, Сотрудник, HRContext, миграции
@@ -57,8 +57,14 @@ backend/
 - Миграция `AddUserCreatedAt` применена к `Sklad_v1_HR`; FK и unique index
   сохранены.
 
+## Переименование
+
+- Папка `backend` переименована в `SkladX01`, решение `SkladApi.sln` —
+  в `SkladX01.sln` (задача 07). Переименование выполнено через `git mv`,
+  история файлов сохранена; названия проектов не менялись.
+- Ссылки на старый путь обновлены в `README.md`,
+  `db/sklad_v1_hr/database-schema.md`, `EmailService/README.md` и журналах.
+
 ## Дальше
 
-- Переименовать `backend` → `SkladX01`, `SkladApi.sln` → `SkladX01.sln`
-  (задача 07).
 - Бизнес-эндпоинты и сидирование администратора.
