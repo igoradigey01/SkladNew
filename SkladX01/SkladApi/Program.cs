@@ -3,6 +3,7 @@ using HRDB.Data;
 using HRDB.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using SkladApi.Repositories;
 using SkladApi.Services;
 using SkladDB.Data;
 using SkladDB.Services;
@@ -18,6 +19,11 @@ builder.Services.AddScoped<ICurrentUserService, HttpCurrentUserService>();
 builder.Services.Configure<EmailSettings>(
     builder.Configuration.GetSection(EmailSettings.SectionName));
 builder.Services.AddScoped<IEmailSender, EmailSender>();
+
+builder.Services.AddScoped<IКлиентRepository, КлиентRepository>();
+builder.Services.AddScoped<IMеткаРасчетRepository, МеткаРасчетRepository>();
+builder.Services.AddScoped<IОтпущенныйТоварRepository, ОтпущенныйТоварRepository>();
+builder.Services.AddScoped<IПринятыеДеньгиRepository, ПринятыеДеньгиRepository>();
 
 builder.Services.AddDbContext<HRContext>(options =>
     options.UseSqlServer(hrConnection));
