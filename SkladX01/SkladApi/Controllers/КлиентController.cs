@@ -8,6 +8,9 @@ namespace SkladApi.Controllers;
 [Route("api/clients")]
 public class КлиентController : ControllerBase
 {
+    private static readonly string[] AllowedSort = ["id", "alias", "name", "phone", "city"];
+    private static readonly string[] AllowedDir = ["asc", "desc"];
+
     private readonly IКлиентRepository _клиентRepository;
     private readonly IMеткаРасчетRepository _меткаРасчетRepository;
     private readonly IОтпущенныйТоварRepository _отпущенныйТоварRepository;
@@ -29,9 +32,34 @@ public class КлиентController : ControllerBase
     public async Task<ActionResult<IReadOnlyList<КлиентDto>>> GetClients(
         [FromQuery] string? phone = null,
         [FromQuery] string? alias = null,
-        [FromQuery] string? city = null)
+        [FromQuery] string? city = null,
+        [FromQuery] string? q = null,
+        [FromQuery] string? sort = null,
+        [FromQuery] string? dir = null,
+        [FromQuery] bool activeOnly = false)
     {
-        var clients = await _клиентRepository.GetAllAsync(phone, alias, city);
+        var sortKey = (sort ?? "alias").Trim().ToLowerInvariant();
+        if (!AllowedSort.Contains(sortKey))
+        {
+            return BadRequest(new
+            {
+                error = "unknown sort",
+                allowed = AllowedSort,
+            });
+        }
+
+        var dirKey = (dir ?? "asc").Trim().ToLowerInvariant();
+        if (!AllowedDir.Contains(dirKey))
+        {
+            return BadRequest(new
+            {
+                error = "unknown dir",
+                allowed = AllowedDir,
+            });
+        }
+
+        var clients = await _клиентRepository.GetAllAsync(
+            phone, alias, city, q, sortKey, dirKey == "desc", activeOnly);
 
         return Ok(clients);
     }
@@ -41,12 +69,15 @@ public class КлиентController : ControllerBase
     {
         var client = await _клиентRepository.GetByIdAsync(id);
 
-        if (client is null)
-        {
-            return NotFound();
-        }
+        return client is null ? NotFound() : Ok(client);
+    }
 
-        return Ok(client);
+    [HttpGet("{id:int}/summary")]
+    public async Task<ActionResult<КлиентSummaryDto>> GetClientSummary(int id)
+    {
+        var summary = await _клиентRepository.GetSummaryAsync(id);
+
+        return summary is null ? NotFound() : Ok(summary);
     }
 
     [HttpGet("{id:int}/marks")]

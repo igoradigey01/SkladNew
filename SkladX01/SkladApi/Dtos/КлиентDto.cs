@@ -8,4 +8,5 @@ public class КлиентDto
     public string Телефон { get; set; } = null!;
     public string Город { get; set; } = null!;
     public decimal ПределКредита { get; set; }
+    public bool Активен { get; set; }
 }
