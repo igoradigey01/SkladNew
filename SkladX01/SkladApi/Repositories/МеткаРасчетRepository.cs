@@ -31,7 +31,8 @@ public class МеткаРасчетRepository : IMеткаРасчетRepository
         const string sql = """
             SELECT s.[КодСделки] AS Id,
                    s.[НомерСделки] AS Номер,
-                   v.[Долг] AS Долг
+                   v.[Долг] AS Долг,
+                   s.[Комментарий] AS Комментарий
             FROM dbo.[Сделка] AS s
             INNER JOIN dbo.[vw_БалансСделки] AS v
                 ON v.[КодСделки] = s.[КодСделки]
@@ -50,7 +51,8 @@ public class МеткаРасчетRepository : IMеткаРасчетRepository
         const string sql = """
             INSERT INTO dbo.[Сделка] ([КодСделки], [КлиентId], [Дата], [Комментарий])
             OUTPUT INSERTED.[КодСделки] AS Id,
-                   INSERTED.[НомерСделки] AS Номер
+                   INSERTED.[НомерСделки] AS Номер,
+                   INSERTED.[Комментарий] AS Комментарий
             VALUES (NEWID(), @clientId, ISNULL(@date, GETDATE()), @comment)
             """;
 
