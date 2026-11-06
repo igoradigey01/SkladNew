@@ -29,7 +29,7 @@ public class МеткаРасчетRepository : IMеткаРасчетRepository
     public async Task<IReadOnlyList<МеткаРасчетDto>> GetByClientIdAsync(int clientId)
     {
         const string sql = """
-            SELECT CAST(s.[LegacyId] AS int) AS Id,
+            SELECT s.[КодСделки] AS Id,
                    s.[НомерСделки] AS Номер,
                    v.[Долг] AS Долг
             FROM dbo.[Сделка] AS s
@@ -43,5 +43,27 @@ public class МеткаРасчетRepository : IMеткаРасчетRepository
         var marks = await connection.QueryAsync<МеткаРасчетDto>(sql, new { clientId });
 
         return marks.ToList();
+    }
+
+    public async Task<МеткаРасчетDto> CreateAsync(int clientId, DateTime? date, string? comment)
+    {
+        const string sql = """
+            INSERT INTO dbo.[Сделка] ([КодСделки], [КлиентId], [Дата], [Комментарий])
+            OUTPUT INSERTED.[КодСделки] AS Id,
+                   INSERTED.[НомерСделки] AS Номер
+            VALUES (NEWID(), @clientId, ISNULL(@date, GETDATE()), @comment)
+            """;
+
+        // DbType задаём явно: с null/DBNull Dapper не может вывести тип параметра.
+        var parameters = new DynamicParameters();
+        parameters.Add("clientId", clientId);
+        parameters.Add("date", date, System.Data.DbType.DateTime);
+        parameters.Add(
+            "comment",
+            string.IsNullOrWhiteSpace(comment) ? null : comment.Trim(),
+            System.Data.DbType.String);
+
+        await using var connection = new SqlConnection(_connectionString);
+        return await connection.QuerySingleAsync<МеткаРасчетDto>(sql, parameters);
     }
 }

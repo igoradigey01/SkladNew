@@ -88,19 +88,36 @@ public class КлиентController : ControllerBase
         return Ok(marks);
     }
 
-    [HttpGet("marks/{markId:int}/products")]
-    public async Task<ActionResult<IReadOnlyList<ОтпущенныйТоварDto>>> GetMarkProducts(int markId)
+    [HttpGet("marks/{dealId:guid}/products")]
+    public async Task<ActionResult<IReadOnlyList<ОтпущенныйТоварDto>>> GetDealProducts(Guid dealId)
     {
-        var products = await _отпущенныйТоварRepository.GetByMarkIdAsync(markId);
+        var products = await _отпущенныйТоварRepository.GetByDealIdAsync(dealId);
 
         return Ok(products);
     }
 
-    [HttpGet("marks/{markId:int}/payments")]
-    public async Task<ActionResult<IReadOnlyList<ПринятыеДеньгиDto>>> GetMarkPayments(int markId)
+    [HttpGet("marks/{dealId:guid}/payments")]
+    public async Task<ActionResult<IReadOnlyList<ПринятыеДеньгиDto>>> GetDealPayments(Guid dealId)
     {
-        var payments = await _принятыеДеньгиRepository.GetByMarkIdAsync(markId);
+        var payments = await _принятыеДеньгиRepository.GetByDealIdAsync(dealId);
 
         return Ok(payments);
+    }
+
+    [HttpPost("{id:int}/marks")]
+    public async Task<ActionResult<МеткаРасчетDto>> CreateDeal(
+        int id,
+        [FromBody] CreateDealRequest? request)
+    {
+        var client = await _клиентRepository.GetByIdAsync(id);
+        if (client is null)
+        {
+            return NotFound(new { error = "client not found", clientId = id });
+        }
+
+        var deal = await _меткаРасчетRepository.CreateAsync(
+            id, request?.Дата, request?.Комментарий);
+
+        return Created($"/api/clients/{id}/marks/{deal.Id}", deal);
     }
 }

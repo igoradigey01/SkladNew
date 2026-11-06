@@ -26,26 +26,26 @@ public class ОтпущенныйТоварRepository : IОтпущенныйТ�
         }
     }
 
-    public async Task<IReadOnlyList<ОтпущенныйТоварDto>> GetByMarkIdAsync(int markId)
+    public async Task<IReadOnlyList<ОтпущенныйТоварDto>> GetByDealIdAsync(Guid dealId)
     {
         const string sql = """
             SELECT n.[Id] AS Id,
                    n.[Номер] AS Номер,
                    n.[Дата] AS Дата,
                    CAST(SUM(r.[Sum]) AS decimal(18, 2)) AS Сумма,
-                   CAST(s.[LegacyId] AS int) AS [МеткаId]
+                   s.[КодСделки] AS [МеткаId]
             FROM dbo.[НакладнаяРасход] AS n
             INNER JOIN dbo.[Расход] AS r
                 ON r.[НакладнаяId] = n.[Id]
             INNER JOIN dbo.[Сделка] AS s
                 ON s.[КодСделки] = n.[КодСделки]
-            WHERE s.[LegacyId] = @markId
-            GROUP BY n.[Id], n.[Номер], n.[Дата], s.[LegacyId]
+            WHERE s.[КодСделки] = @dealId
+            GROUP BY n.[Id], n.[Номер], n.[Дата], s.[КодСделки]
             ORDER BY n.[Дата], n.[Id]
             """;
 
         await using var connection = new SqlConnection(_connectionString);
-        var products = await connection.QueryAsync<ОтпущенныйТоварDto>(sql, new { markId });
+        var products = await connection.QueryAsync<ОтпущенныйТоварDto>(sql, new { dealId });
 
         return products.ToList();
     }

@@ -4,5 +4,5 @@ namespace SkladApi.Repositories;
 
 public interface IОтпущенныйТоварRepository
 {
-    Task<IReadOnlyList<ОтпущенныйТоварDto>> GetByMarkIdAsync(int markId);
+    Task<IReadOnlyList<ОтпущенныйТоварDto>> GetByDealIdAsync(Guid dealId);
 }

@@ -26,22 +26,22 @@ public class ПринятыеДеньгиRepository : IПринятыеДень�
         }
     }
 
-    public async Task<IReadOnlyList<ПринятыеДеньгиDto>> GetByMarkIdAsync(int markId)
+    public async Task<IReadOnlyList<ПринятыеДеньгиDto>> GetByDealIdAsync(Guid dealId)
     {
         const string sql = """
             SELECT m.[Id] AS Id,
                    m.[Date] AS Дата,
                    m.[Sum] AS Сумма,
-                   CAST(@markId AS int) AS [МеткаId]
+                   s.[КодСделки] AS [МеткаId]
             FROM dbo.[Деньги] AS m
             INNER JOIN dbo.[Сделка] AS s
                 ON s.[КодСделки] = m.[КодСделки]
-            WHERE s.[LegacyId] = @markId
+            WHERE s.[КодСделки] = @dealId
             ORDER BY m.[Date]
             """;
 
         await using var connection = new SqlConnection(_connectionString);
-        var payments = await connection.QueryAsync<ПринятыеДеньгиDto>(sql, new { markId });
+        var payments = await connection.QueryAsync<ПринятыеДеньгиDto>(sql, new { dealId });
 
         return payments.ToList();
     }

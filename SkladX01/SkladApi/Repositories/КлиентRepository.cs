@@ -92,7 +92,11 @@ public class КлиентRepository : IКлиентRepository
         }
 
         // [Id] обязателен: без него порядок равных значений «прыгает».
-        sql += $" ORDER BY {sortColumn} {direction}, [Id] {direction}";
+        // При сортировке по самому [Id] второй ключ не добавляем — SQL Server
+        // падает с «A column has been specified more than once in the order by list».
+        sql += sortColumn == "[Id]"
+            ? $" ORDER BY [Id] {direction}"
+            : $" ORDER BY {sortColumn} {direction}, [Id] {direction}";
 
         await using var connection = new SqlConnection(_connectionString);
         var clients = await connection.QueryAsync<КлиентDto>(sql, parameters);
