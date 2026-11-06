@@ -1,5 +1,7 @@
 # Задача: Настройка ASP.NET Core Identity и Аудита
 
+> **Статус:** выполнено. Итог: `SkladX01/HRDB` + `IAuditable`/`AuditableEntity`; папка `backend/` — историческое имя.
+
 ## 1. Контекст
 - **Проект:** `SkladNew`
 - **Бэкенд:** ASP.NET Core Web API (папка `backend/`)

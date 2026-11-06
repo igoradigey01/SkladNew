@@ -1,41 +1,48 @@
-# Шпаргалка: Сквозной тест архитектуры (API + Angular)
+# Как проверить связку API + фронт
 
-## Цель
-Проверить, что бэкенд (`SkladX01`) и фронтенд (`skladx01` в NX) успешно общаются.
+Короткий сквозной тест: фронт `apps/skladX01_v0` → прокси `/api` → `SkladApi` → БД.
 
-## Шаги
+## 1. Запустить API
 
-### 1. Бэкенд (C#)
-- В `SkladApi/Controllers/КлиентController.cs` создать эндпоинт `GET /api/clients`.
-- Использовать `IDbConnection` (Dapper).
-- Строка подключения: `appsettings.json` (ключ `SkladDb`).
-- **Важно:** Указать маршрут на латинице: `[Route("api/clients")]`.
-
-### 2. Настройка CORS (Program.cs)
-```csharp
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowAngular", policy =>
-    {
-        policy.WithOrigins("http://localhost:4200") // порт Angular
-              .AllowAnyHeader()
-              .AllowAnyMethod();
-    });
-});
-app.UseCors("AllowAngular");
+```bash
+cd /mnt/developer/VS_Prodject/my_Sclad_v1/SkladNew/SkladX01/SkladApi
+dotnet run          # http://localhost:5240
 ```
 
-### 3. Фронтенд (Angular NX)
-- Проект: `apps/skladx01`.
-- Создать сервис `ClientService` (HttpClient).
-- URL: `http://localhost:5000/api/clients`.
-- Создать компонент `ClientListComponent` (таблица: ID, ФИО, Телефон, Город).
+Строку подключения `SkladDb` берёт из `dotnet user-secrets`; если её нет — API упадёт
+с сообщением «Строка подключения 'SkladDb' не задана».
 
-## ⚠️ Важный нюанс про URL
-Если в контроллере использовать `[Route("api/[controller]")]` и назвать контроллер `КлиентController`, URL будет `http://localhost:5000/api/Клиент`. Браузеры это переварят, но лучше явно писать `api/clients` (латиницей), чтобы избежать проблем с URL-encoding.
+Быстрая проверка без фронта:
 
-## 🎯 Проверка
-1. Запустить бэкенд: `dotnet run` (в папке `SkladApi`).
-2. Запустить фронтенд: `npx nx serve skladx01`.
-3. Открыть браузер: `http://localhost:4200/clients`.
-4. Убедиться, что данные загрузились.
+```bash
+curl -s 'http://localhost:5240/api/clients?sort=alias&dir=asc' | head -c 200
+curl -s 'http://localhost:5240/api/clients/33/marks'
+```
+
+## 2. Запустить фронт
+
+```bash
+cd /mnt/developer/wsv3
+npx nx run skladX01_v0:serve
+```
+
+Приложение поднимается на `http://localhost:4200`, запросы к `/api` уходят на `5240`
+через `apps/skladX01_v0/proxy.conf.json`. **CORS в `SkladApi` не нужен** — браузер
+обращается к своему origin, прокси перенаправляет запрос.
+
+## 3. Что должно работать
+
+1. `/clients` — список клиентов, поиск, сортировка по колонкам (включая `id`).
+2. `/clients/{id}` — карточка: сводка, блок «КодСделки», товары и деньги по выбранной сделке.
+3. Создание сделки — поле комментария + кнопка «Создать новую сделку».
+4. `/clients/{id}/invoice/new?dealId=…` — страница накладной (пока без сохранения).
+
+## 4. Если не работает
+
+| Симптом | Причина | Что делать |
+|---|---|---|
+| В списке `id` числовые, карточка падает | на 5240 висит старый процесс API | `pkill -f SkladApi`, запустить заново |
+| `404` на `/api/...` | не запущен прокси или API | проверить `proxy.conf.json` и порт 5240 |
+| `500` при `sort=id` | старая сборка API (баг `ORDER BY [Id], [Id]`) | пересобрать и перезапустить API |
+| Пустые таблицы | нет сделок у клиента | выбрать другого клиента |
+| `NG5002` в шаблоне | кириллица в выражении | только латинские поля модели |

@@ -1,9 +1,9 @@
 # Промпт 01 — Вариант 1: схема 1:1 по эталону, типы в современном виде
 
-> **Часть проекта.** См. [README](../README.md) и [00-MAIN-PROMPT](../../docs/prompts/00-MAIN-PROMPT.md).
+> **Часть проекта.** См. [README](../README.md). **Статус:** архив — вариант схемы, реализован `db/sklad_v4_1`.
 >
 > **Эталон:** `Sh_29-06-25` — рабочая БД складского модуля (выгрузка структуры и
-> данных: [`../../docs/reference/target-model/`](../reference/target-model/README.md)).
+> данных: [`db/sklad_v4_1/database-schema.md`](../../db/sklad_v4_1/database-schema.md)).
 
 ## 1. НАЗНАЧЕНИЕ
 
@@ -124,7 +124,6 @@ sqlcmd -S localhost -E -f 65001 -b -i migrate-data-from-Sh_29-06-25.sql
 
 ## 9. ССЫЛКИ
 
-- [Структура эталона](../reference/target-model/Sh_29-06-25-schema.sql)
-- [Процедуры и представления эталона](../reference/target-model/Sh_29-06-25-objects.sql)
-- [Схема БД варианта 1](db/variant1-etalon/database-schema.md)
+- Актуальная схема: [db/sklad_v4_1/database-schema.md](../../db/sklad_v4_1/database-schema.md)
+- Исходники эталона `Sh_29-06-25` в репозитории не сохранены
 - [Промпт варианта 2](02-variant-hybrid-uetr.md)

@@ -1,6 +1,6 @@
 # Промпт 02 — Схема из двух баз: `Sklad_v1` (склад) + `Sklad_v1_HR` (кадры)
 
-> **Часть проекта.** См. [README](../README.md) и [00-MAIN-PROMPT](../../docs/prompts/00-MAIN-PROMPT.md).
+> **Часть проекта.** См. [README](../README.md). **Статус:** архив — вариант схемы, реализован `db/sklad_v4_1`.
 >
 > **Эталон:** `Sh_29-06-25` — рабочая БД складского модуля.
 
@@ -155,8 +155,6 @@ sqlcmd -S localhost -E -f 65001 -b -i migrate-movements-from-Sh_29-06-25.sql
 
 ## 10. ССЫЛКИ
 
-- [Структура эталона](../reference/target-model/Sh_29-06-25-schema.sql)
-- [Схема основной базы `Sklad_v1`](db/sklad_v1/database-schema.md)
-- [Схема кадровой базы `Sklad_v1_HR`](db/sklad_v1_hr/database-schema.md)
-- [Главный промпт: UETR как идея](../../docs/prompts/00-MAIN-PROMPT.md)
+- Актуальная схема: [db/sklad_v4_1/database-schema.md](../../db/sklad_v4_1/database-schema.md)
+- Разделение на `Sklad_v1` и `Sklad_v1_HR` не реализовано: в v4.1 две базы — `Sklad-v4.1` и HR-база Identity
 - [Промпт варианта 1](01-variant-etalon-1to1.md)

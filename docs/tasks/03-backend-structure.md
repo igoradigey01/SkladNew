@@ -1,5 +1,7 @@
 # Задача: Создать правильную структуру Backend (Solution)
 
+> **Статус:** выполнено. Итог: `SkladNew/SkladX01/` — `SkladApi`, `SkladDB`, `HRDB`, `EmailService`.
+
 ## 1. КОНТЕКСТ
 - **Проект:** Склад (SkladNew).
 - **Текущая папка:** `SkladNew/backend/`.

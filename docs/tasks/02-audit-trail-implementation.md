@@ -1,5 +1,7 @@
 # Задача: Реализация Audit Trail (Аудит) в коде
 
+> **Статус:** выполнено. Реализовано в `SkladDB`: `AuditableEntity`, `IAuditable`, `ApplyAudit` в `SkladContext`.
+
 ## 1. КОНТЕКСТ
 - **БД:** `Sklad_v4.1.1` (все 19 таблиц уже имеют колонки `СоздалId`, `ИзменилId`, `ДатаСоздания`, `ДатаИзменения`).
 - **Бэкенд:** `SkladNew/backend/src/SkladApi`.

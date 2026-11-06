@@ -1,7 +1,7 @@
 # Вариант 3: характеристики по внешним стандартам
 
-> **Часть проекта.** См. [Главный промпт](00-MAIN-PROMPT.md).
-> Схема: [`db/sklad_v4/database-schema.md`](../db/sklad_v4/database-schema.md).
+> **Часть проекта.** См. [README](../README.md). **Статус:** архив — вариант схемы, реализован `db/sklad_v4_1`.
+> Схема: [`db/sklad_v4_1/database-schema.md`](../../db/sklad_v4_1/database-schema.md).
 
 ## 1. ЗАМЫСЕЛ
 
