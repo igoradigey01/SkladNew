@@ -5,5 +5,5 @@ public class ПринятыеДеньгиDto
     public int Id { get; set; }
     public DateTime Дата { get; set; }
     public decimal Сумма { get; set; }
-    public Guid МеткаId { get; set; }
+    public Guid СделкаId { get; set; }
 }

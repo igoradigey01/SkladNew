@@ -6,5 +6,5 @@ public class ОтпущенныйТоварDto
     public string Номер { get; set; } = null!;
     public DateTime Дата { get; set; }
     public decimal Сумма { get; set; }
-    public Guid МеткаId { get; set; }
+    public Guid СделкаId { get; set; }
 }

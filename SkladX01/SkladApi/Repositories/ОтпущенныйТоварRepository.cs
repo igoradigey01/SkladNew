@@ -33,7 +33,7 @@ public class ОтпущенныйТоварRepository : IОтпущенныйТ�
                    n.[Номер] AS Номер,
                    n.[Дата] AS Дата,
                    CAST(SUM(r.[Sum]) AS decimal(18, 2)) AS Сумма,
-                   s.[КодСделки] AS [МеткаId]
+                   s.[КодСделки] AS [СделкаId]
             FROM dbo.[НакладнаяРасход] AS n
             INNER JOIN dbo.[Расход] AS r
                 ON r.[НакладнаяId] = n.[Id]

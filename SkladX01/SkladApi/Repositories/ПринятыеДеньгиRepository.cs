@@ -32,7 +32,7 @@ public class ПринятыеДеньгиRepository : IПринятыеДень�
             SELECT m.[Id] AS Id,
                    m.[Date] AS Дата,
                    m.[Sum] AS Сумма,
-                   s.[КодСделки] AS [МеткаId]
+                   s.[КодСделки] AS [СделкаId]
             FROM dbo.[Деньги] AS m
             INNER JOIN dbo.[Сделка] AS s
                 ON s.[КодСделки] = m.[КодСделки]
