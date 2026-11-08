@@ -13,7 +13,7 @@ import time
 import urllib.request
 
 BASE = "http://10.42.0.100:11434"
-DEFAULT_MODELS = ["qwen2.5:7b-instruct", "qwen2.5:14b-instruct", "gemma4:e2b"]
+DEFAULT_MODELS = ["qwen2.5:7b-instruct", "qwen2.5:14b-instruct", "gemma4:e2b", "gemma4:e4b"]
 
 SCHEMA = {
     "type": "object",
@@ -39,6 +39,7 @@ HEAD = (
     "raw_name — название товара ВМЕСТЕ с размером и маркой.\n"
     "quantity — количество: число перед единицей измерения.\n"
     "unit — единица измерения как в тексте, иначе пустая строка.\n"
+    "Слова «кг», «мешок», «штук», «метр» — это unit, в raw_name их не включай.\n"
     "ВАЖНО: размеры и марки — часть названия, а не количество.\n"
     "Не придумывай товары, которых нет в тексте.\n\n"
     "Пример. Текст: краска белая, 5 литров\n"
