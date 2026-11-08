@@ -132,3 +132,7 @@ test-data/
 *.key
 *.pem
 deploy.md
+
+# Python
+__pycache__/
+*.pyc
