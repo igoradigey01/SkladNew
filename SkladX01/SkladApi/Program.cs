@@ -1,4 +1,5 @@
 using EmailService;
+using Microsoft.Extensions.Options;
 using HRDB.Data;
 using HRDB.Models;
 using Microsoft.AspNetCore.Identity;
@@ -24,6 +25,16 @@ builder.Services.AddScoped<IКлиентRepository, КлиентRepository>();
 builder.Services.AddScoped<IMеткаРасчетRepository, МеткаРасчетRepository>();
 builder.Services.AddScoped<IОтпущенныйТоварRepository, ОтпущенныйТоварRepository>();
 builder.Services.AddScoped<IПринятыеДеньгиRepository, ПринятыеДеньгиRepository>();
+builder.Services.AddScoped<IНоменклатураRepository, НоменклатураRepository>();
+
+builder.Services.Configure<OllamaSettings>(
+    builder.Configuration.GetSection(OllamaSettings.SectionName));
+
+builder.Services.AddHttpClient("ollama", (services, client) =>
+{
+    var ollama = services.GetRequiredService<IOptions<OllamaSettings>>().Value;
+    client.Timeout = TimeSpan.FromSeconds(ollama.TimeoutSeconds);
+});
 
 builder.Services.AddDbContext<HRContext>(options =>
     options.UseSqlServer(hrConnection));
