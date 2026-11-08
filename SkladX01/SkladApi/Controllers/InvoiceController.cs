@@ -150,14 +150,21 @@ public class InvoiceController : ControllerBase
         CancellationToken cancellationToken)
     {
         var client = _httpClientFactory.CreateClient("ollama");
-        var payload = new
+
+        // gemma4 по умолчанию тратит время на блок рассуждений — для разбора он не нужен.
+        var payload = new Dictionary<string, object?>
         {
-            model = _ollama.Model,
-            prompt = BuildPrompt(text),
-            stream = false,
-            format = InvoiceSchema,
-            options = new { temperature = 0 },
+            ["model"] = _ollama.Model,
+            ["prompt"] = BuildPrompt(text),
+            ["stream"] = false,
+            ["format"] = InvoiceSchema,
+            ["options"] = new { temperature = 0 },
         };
+
+        if (_ollama.Model.StartsWith("gemma4", StringComparison.OrdinalIgnoreCase))
+        {
+            payload["think"] = false;
+        }
 
         using var response = await client.PostAsJsonAsync(
             $"{_ollama.BaseUrl.TrimEnd('/')}/api/generate", payload, cancellationToken);
