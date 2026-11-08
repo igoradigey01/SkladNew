@@ -6,6 +6,8 @@ namespace SkladApi.Services;
 /// </summary>
 public static class FuzzyMatcher
 {
+    private static readonly System.Text.RegularExpressions.Regex NumbersRegex =
+        new(@"\d+", System.Text.RegularExpressions.RegexOptions.Compiled);
     /// <summary>Схожесть двух строк в процентах: 0 — ничего общего, 100 — совпадение.</summary>
     public static int Similarity(string? source, string? target)
     {
@@ -68,5 +70,35 @@ public static class FuzzyMatcher
             .ToArray();
 
         return string.Join(' ', new string(chars).Split(' ', StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    /// <summary>
+    /// true, если в обеих строках есть числа и ни одно не совпадает.
+    /// Так «гвозди 2,5х50» не притягивается к «Гвозди 50» только по слову.
+    /// </summary>
+    public static bool NumbersConflict(string? source, string? target)
+    {
+        var left = ExtractNumbers(source);
+        var right = ExtractNumbers(target);
+
+        return left.Count > 0 && right.Count > 0 && !left.Overlaps(right);
+    }
+
+    private static HashSet<string> ExtractNumbers(string? value)
+    {
+        var numbers = new HashSet<string>(StringComparer.Ordinal);
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return numbers;
+        }
+
+        // «4.2х75» должно дать 4, 2 и 75, а не «4275».
+        foreach (System.Text.RegularExpressions.Match match in NumbersRegex.Matches(value))
+        {
+            numbers.Add(match.Value);
+        }
+
+        return numbers;
     }
 }

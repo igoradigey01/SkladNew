@@ -12,7 +12,7 @@ namespace SkladApi.Controllers;
 [Route("api/invoice")]
 public class InvoiceController : ControllerBase
 {
-    private const int MatchThreshold = 50;
+    private const int MatchThreshold = 75;
     private const int MaxTextLength = 4000;
 
     private static readonly string[] ItemsPropertyNames = ["items", "rows", "data", "result"];
@@ -179,10 +179,18 @@ public class InvoiceController : ControllerBase
     private static string BuildPrompt(string text)
     {
         return
-            "Разбери текст накладной на все позиции. " +
-            "raw_name — название товара как в тексте; quantity — количество " +
-            "(если не указано, 1); unit — единица измерения как в тексте " +
-            "(или пустая строка). Не придумывай товары, которых нет в тексте.\n\n" +
+            "Разбери текст накладной на позиции.\n" +
+            "raw_name — название товара ВМЕСТЕ с размером и маркой (например «шайба цинк 10», " +
+            "«гвозди 2,5х50», «цемент М-500»).\n" +
+            "quantity — количество: число перед единицей измерения (штук, кг, мешков, м, л).\n" +
+            "unit — единица измерения как в тексте, иначе пустая строка.\n" +
+            "ВАЖНО: размеры и марки (10, 6, 3.5 на 25, М-500) — часть названия, а не количество.\n" +
+            "Не придумывай товары, которых нет в тексте.\n\n" +
+            "Пример 1.\nТекст: шайба цинк 10, 100 штук; гвозди 2,5х50 3 кг\n" +
+            "Ответ: {\"items\":[{\"raw_name\":\"шайба цинк 10\",\"quantity\":100,\"unit\":\"штук\"}," +
+            "{\"raw_name\":\"гвозди 2,5х50\",\"quantity\":3,\"unit\":\"кг\"}]}\n\n" +
+            "Пример 2.\nТекст: саморезы 3.5 на 25, 200 штук\n" +
+            "Ответ: {\"items\":[{\"raw_name\":\"саморезы 3.5 на 25\",\"quantity\":200,\"unit\":\"штук\"}]}\n\n" +
             "Текст: " + text;
     }
 
@@ -256,6 +264,11 @@ public class InvoiceController : ControllerBase
 
         foreach (var product in products)
         {
+            if (FuzzyMatcher.NumbersConflict(item.RawName, product.Название))
+            {
+                continue;
+            }
+
             var nameScore = FuzzyMatcher.Similarity(item.RawName, product.Название);
             var skuScore = FuzzyMatcher.Similarity(item.RawName, product.Артикул);
             var score = Math.Max(nameScore, skuScore);

@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmailService", "EmailServic
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HRDB", "HRDB\HRDB.csproj", "{CCA2C581-7841-4EF7-8CFE-B0DD2FD8ECA6}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SkladApi.Tests", "SkladApi.Tests\SkladApi.Tests.csproj", "{233DFE7F-B27C-4A28-ADE3-511C301AD2A1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -36,5 +38,9 @@ Global
 		{CCA2C581-7841-4EF7-8CFE-B0DD2FD8ECA6}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{CCA2C581-7841-4EF7-8CFE-B0DD2FD8ECA6}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{CCA2C581-7841-4EF7-8CFE-B0DD2FD8ECA6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{233DFE7F-B27C-4A28-ADE3-511C301AD2A1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{233DFE7F-B27C-4A28-ADE3-511C301AD2A1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{233DFE7F-B27C-4A28-ADE3-511C301AD2A1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{233DFE7F-B27C-4A28-ADE3-511C301AD2A1}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
