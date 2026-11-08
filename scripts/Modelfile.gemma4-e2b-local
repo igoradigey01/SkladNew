@@ -1,0 +1,17 @@
+# Локальная сборка для разбора накладной: параметры без запечённого промта.
+# Промт и JSON-схему присылает SkladApi в каждом запросе — дублировать их
+# в SYSTEM не нужно: расхождение промтов ухудшает разбор.
+#
+# Сборка: ollama create Gemma4-e2b-local -f scripts/Modelfile.gemma4-e2b-local
+FROM gemma4:e2b
+
+# Жадное декодирование: разбор должен быть детерминированным
+PARAMETER temperature 0
+PARAMETER top_p 0.1
+
+# Короткие тексты накладных; 8k хватает, лишний контекст ест VRAM
+PARAMETER num_ctx 8192
+
+# Все слои на GPU: модель ~4.6 ГБ, влезает в 11 ГБ
+PARAMETER num_gpu -1
+PARAMETER num_thread 14
