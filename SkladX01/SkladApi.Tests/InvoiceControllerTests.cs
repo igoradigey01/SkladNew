@@ -130,6 +130,16 @@ public class InvoiceControllerTests
         private readonly IReadOnlyList<НоменклатураDto> _items = items.ToList();
 
         public Task<IReadOnlyList<НоменклатураDto>> GetActiveAsync() => Task.FromResult(_items);
+
+        public Task EnsureVectorColumnAsync() => Task.CompletedTask;
+
+        public Task<IReadOnlyList<НоменклатураВекторDto>> GetWithoutVectorAsync() =>
+            Task.FromResult<IReadOnlyList<НоменклатураВекторDto>>([]);
+
+        public Task<IReadOnlyList<НоменклатураВекторDto>> GetWithVectorAsync() =>
+            Task.FromResult<IReadOnlyList<НоменклатураВекторDto>>([]);
+
+        public Task UpdateVectorAsync(int id, byte[] vector) => Task.CompletedTask;
     }
 
     private sealed class StubFactory(HttpClient client) : IHttpClientFactory
