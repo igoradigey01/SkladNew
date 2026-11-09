@@ -30,6 +30,8 @@ builder.Services.AddScoped<IНоменклатураRepository, Номенкла
 builder.Services.Configure<OllamaSettings>(
     builder.Configuration.GetSection(OllamaSettings.SectionName));
 
+builder.Services.AddHttpClient<OllamaEmbeddingService>();
+
 builder.Services.AddHttpClient("ollama", (services, client) =>
 {
     var ollama = services.GetRequiredService<IOptions<OllamaSettings>>().Value;
