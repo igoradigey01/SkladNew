@@ -72,7 +72,8 @@ public class НоменклатураRepository : IНоменклатураRepos
     public async Task<IReadOnlyList<НоменклатураВекторDto>> GetWithVectorAsync()
     {
         const string sql = """
-            SELECT [Id] AS Id, [Название] AS Название, [Вектор] AS Вектор
+            SELECT [Id] AS Id, [Название] AS Название,
+                   [ЦенаПродажная] AS ЦенаПродажная, [Вектор] AS Вектор
             FROM dbo.[Номенклатура]
             WHERE [Активен] = 1
               AND [Вектор] IS NOT NULL

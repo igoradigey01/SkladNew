@@ -5,5 +5,6 @@ public class НоменклатураВекторDto
 {
     public int Id { get; set; }
     public string Название { get; set; } = null!;
+    public decimal? ЦенаПродажная { get; set; }
     public byte[]? Вектор { get; set; }
 }

@@ -87,6 +87,49 @@ public class NomenclatureController : ControllerBase
     }
 
     /// <summary>
+    /// Кандидаты для ручного выбора позиции: гибрид косинуса и Левенштейна,
+    /// кандидаты с несовпадающими размерами отбрасываются.
+    /// </summary>
+    [HttpGet("candidates")]
+    public async Task<IActionResult> Candidates(
+        [FromQuery] string? q,
+        [FromQuery] int limit = 5,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(q))
+        {
+            return BadRequest(new { error = "Поисковый запрос пуст." });
+        }
+
+        var text = q.Trim();
+        var query = await _embeddings.GetEmbeddingAsync(text, cancellationToken);
+        var rows = await _номенклатура.GetWithVectorAsync();
+
+        var scored = rows
+            .Where(row => !FuzzyMatcher.NumbersConflict(text, row.Название))
+            .Select(row =>
+            {
+                var cosine = Cosine(query, ToFloats(row.Вектор));
+                var lexical = FuzzyMatcher.Similarity(text, row.Название);
+
+                return new
+                {
+                    row.Id,
+                    name = row.Название,
+                    price = row.ЦенаПродажная,
+                    score = Math.Round(cosine * 50 + lexical * 0.5, 1),
+                    cosine = Math.Round(cosine, 3),
+                    lexical,
+                };
+            })
+            .OrderByDescending(item => item.score)
+            .Take(Math.Clamp(limit, 1, 20))
+            .ToList();
+
+        return Ok(scored);
+    }
+
+    /// <summary>
     /// Пересобирает векторы номенклатуры: добавляет колонку [Вектор], если её нет,
     /// и считает эмбеддинги для строк, где вектор пуст или неверной длины.
     /// </summary>
