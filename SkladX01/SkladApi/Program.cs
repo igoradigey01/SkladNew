@@ -26,6 +26,8 @@ builder.Services.AddScoped<IMеткаРасчетRepository, МеткаРасч�
 builder.Services.AddScoped<IОтпущенныйТоварRepository, ОтпущенныйТоварRepository>();
 builder.Services.AddScoped<IПринятыеДеньгиRepository, ПринятыеДеньгиRepository>();
 builder.Services.AddScoped<IНоменклатураRepository, НоменклатураRepository>();
+builder.Services.AddScoped<IПоставщикRepository, ПоставщикRepository>();
+builder.Services.AddScoped<IСкладRepository, СкладRepository>();
 
 builder.Services.Configure<OllamaSettings>(
     builder.Configuration.GetSection(OllamaSettings.SectionName));
