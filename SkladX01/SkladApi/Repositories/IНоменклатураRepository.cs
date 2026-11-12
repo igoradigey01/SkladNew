@@ -16,4 +16,16 @@ public interface IНоменклатураRepository
     Task<IReadOnlyList<НоменклатураВекторDto>> GetWithVectorAsync();
 
     Task UpdateVectorAsync(int id, byte[] vector);
+
+    /// <summary>Быстрый поиск по Код/Артикул/Название для ввода в документ.</summary>
+    Task<IReadOnlyList<НоменклатураQuickDto>> QuickSearchAsync(string query, int limit);
+
+    /// <summary>Справочники для быстрого создания: группы, виды, категории, единицы.</summary>
+    Task<НоменклатураReferencesDto> GetReferencesAsync();
+
+    /// <summary>Характеристики вида номенклатуры со списками допустимых значений.</summary>
+    Task<IReadOnlyList<ХарактеристикаВидаDto>> GetCharacteristicsAsync(int видId);
+
+    /// <summary>Создаёт позицию и значения характеристик в одной транзакции.</summary>
+    Task<int> CreateAsync(СоздатьНоменклатуруRequest request);
 }

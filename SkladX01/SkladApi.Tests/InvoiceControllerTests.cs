@@ -140,6 +140,20 @@ public class InvoiceControllerTests
             Task.FromResult<IReadOnlyList<НоменклатураВекторDto>>([]);
 
         public Task UpdateVectorAsync(int id, byte[] vector) => Task.CompletedTask;
+
+        public Task<IReadOnlyList<НоменклатураQuickDto>> QuickSearchAsync(
+            string query, int limit) =>
+            Task.FromResult<IReadOnlyList<НоменклатураQuickDto>>([]);
+
+        public Task<НоменклатураReferencesDto> GetReferencesAsync() =>
+            Task.FromResult(new НоменклатураReferencesDto());
+
+        public Task<IReadOnlyList<ХарактеристикаВидаDto>> GetCharacteristicsAsync(
+            int видId) =>
+            Task.FromResult<IReadOnlyList<ХарактеристикаВидаDto>>([]);
+
+        public Task<int> CreateAsync(СоздатьНоменклатуруRequest request) =>
+            Task.FromResult(0);
     }
 
     private sealed class StubFactory(HttpClient client) : IHttpClientFactory
