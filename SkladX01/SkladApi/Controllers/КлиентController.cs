@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using SkladApi.Dtos;
 using SkladApi.Repositories;
+using SkladApi.Services;
 
 namespace SkladApi.Controllers;
 
@@ -15,17 +16,20 @@ public class КлиентController : ControllerBase
     private readonly IMеткаРасчетRepository _меткаРасчетRepository;
     private readonly IОтпущенныйТоварRepository _отпущенныйТоварRepository;
     private readonly IПринятыеДеньгиRepository _принятыеДеньгиRepository;
+    private readonly IClientVoiceSearchService _voiceSearch;
 
     public КлиентController(
         IКлиентRepository клиентRepository,
         IMеткаРасчетRepository меткаРасчетRepository,
         IОтпущенныйТоварRepository отпущенныйТоварRepository,
-        IПринятыеДеньгиRepository принятыеДеньгиRepository)
+        IПринятыеДеньгиRepository принятыеДеньгиRepository,
+        IClientVoiceSearchService voiceSearch)
     {
         _клиентRepository = клиентRepository;
         _меткаРасчетRepository = меткаРасчетRepository;
         _отпущенныйТоварRepository = отпущенныйТоварRepository;
         _принятыеДеньгиRepository = принятыеДеньгиRepository;
+        _voiceSearch = voiceSearch;
     }
 
     [HttpGet]
@@ -119,5 +123,31 @@ public class КлиентController : ControllerBase
             id, request?.Дата, request?.Комментарий);
 
         return Created($"/api/clients/{id}/marks/{deal.Id}", deal);
+    }
+
+    /// <summary>Поиск клиента по продиктованному тексту.</summary>
+    [HttpPost("voice-search")]
+    public async Task<ActionResult<IReadOnlyList<ClientCandidate>>> SearchClientsByVoice(
+        [FromBody] ClientVoiceQuery? query,
+        CancellationToken cancellationToken)
+    {
+        var text = query?.RawText?.Trim();
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return BadRequest(new { error = "Голосовой текст пуст." });
+        }
+
+        if (text.Length > ClientVoiceSearchService.MaxTextLength)
+        {
+            return BadRequest(new
+            {
+                error = $"Текст длиннее {ClientVoiceSearchService.MaxTextLength} символов.",
+            });
+        }
+
+        var candidates = await _voiceSearch.SearchAsync(text, cancellationToken);
+
+        return Ok(candidates);
     }
 }
