@@ -81,4 +81,28 @@ public class ПоставщикRepository : IПоставщикRepository
         await using var connection = new SqlConnection(_connectionString);
         return await connection.QueryFirstOrDefaultAsync<ПоставщикDto>(sql, new { id });
     }
+
+    public async Task<ПоставщикSummaryDto?> GetSummaryAsync(int id)
+    {
+        const string sql = """
+            SELECT p.[Id] AS ПоставщикId,
+                   p.[Название] AS Название,
+                   p.[Город] AS Город,
+                   p.[Телефон] AS Телефон,
+                   COUNT(v.[КодСделки]) AS Сделок,
+                   CAST(ISNULL(SUM(v.[Получено]), 0) AS decimal(18, 2)) AS Получено,
+                   CAST(ISNULL(SUM(v.[Отдано]), 0) AS decimal(18, 2)) AS Отдано,
+                   CAST(ISNULL(SUM(v.[Долг]), 0) AS decimal(18, 2)) AS Долг,
+                   CAST(ISNULL(SUM(v.[Переплата]), 0) AS decimal(18, 2)) AS Переплата
+            FROM dbo.[Поставщик] AS p
+            LEFT JOIN dbo.[vw_БалансСделкиПоставщика] AS v
+                ON v.[ПоставщикId] = p.[Id]
+            WHERE p.[Id] = @id
+            GROUP BY p.[Id], p.[Название], p.[Город], p.[Телефон]
+            """;
+
+        await using var connection = new SqlConnection(_connectionString);
+        return await connection.QueryFirstOrDefaultAsync<ПоставщикSummaryDto>(
+            sql, new { id });
+    }
 }

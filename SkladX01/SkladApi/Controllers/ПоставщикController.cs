@@ -12,10 +12,20 @@ public class ПоставщикController : ControllerBase
     private static readonly string[] AllowedDir = ["asc", "desc"];
 
     private readonly IПоставщикRepository _поставщикRepository;
+    private readonly IСделкаПоставщикаRepository _сделкаПоставщикаRepository;
+    private readonly IПолученныйТоварRepository _полученныйТоварRepository;
+    private readonly IОтданныеДеньгиRepository _отданныеДеньгиRepository;
 
-    public ПоставщикController(IПоставщикRepository поставщикRepository)
+    public ПоставщикController(
+        IПоставщикRepository поставщикRepository,
+        IСделкаПоставщикаRepository сделкаПоставщикаRepository,
+        IПолученныйТоварRepository полученныйТоварRepository,
+        IОтданныеДеньгиRepository отданныеДеньгиRepository)
     {
         _поставщикRepository = поставщикRepository;
+        _сделкаПоставщикаRepository = сделкаПоставщикаRepository;
+        _полученныйТоварRepository = полученныйТоварRepository;
+        _отданныеДеньгиRepository = отданныеДеньгиRepository;
     }
 
     [HttpGet]
@@ -56,5 +66,37 @@ public class ПоставщикController : ControllerBase
         var supplier = await _поставщикRepository.GetByIdAsync(id);
 
         return supplier is null ? NotFound() : Ok(supplier);
+    }
+
+    [HttpGet("{id:int}/summary")]
+    public async Task<ActionResult<ПоставщикSummaryDto>> GetSupplierSummary(int id)
+    {
+        var summary = await _поставщикRepository.GetSummaryAsync(id);
+
+        return summary is null ? NotFound() : Ok(summary);
+    }
+
+    [HttpGet("{id:int}/deals")]
+    public async Task<ActionResult<IReadOnlyList<СделкаПоставщикаDto>>> GetSupplierDeals(int id)
+    {
+        var deals = await _сделкаПоставщикаRepository.GetBySupplierIdAsync(id);
+
+        return Ok(deals);
+    }
+
+    [HttpGet("deals/{dealId:guid}/products")]
+    public async Task<ActionResult<IReadOnlyList<ПолученныйТоварDto>>> GetDealProducts(Guid dealId)
+    {
+        var products = await _полученныйТоварRepository.GetByDealIdAsync(dealId);
+
+        return Ok(products);
+    }
+
+    [HttpGet("deals/{dealId:guid}/payments")]
+    public async Task<ActionResult<IReadOnlyList<ОтданныеДеньгиDto>>> GetDealPayments(Guid dealId)
+    {
+        var payments = await _отданныеДеньгиRepository.GetByDealIdAsync(dealId);
+
+        return Ok(payments);
     }
 }

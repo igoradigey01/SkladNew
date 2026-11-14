@@ -27,6 +27,9 @@ builder.Services.AddScoped<IОтпущенныйТоварRepository, Отпущ
 builder.Services.AddScoped<IПринятыеДеньгиRepository, ПринятыеДеньгиRepository>();
 builder.Services.AddScoped<IНоменклатураRepository, НоменклатураRepository>();
 builder.Services.AddScoped<IПоставщикRepository, ПоставщикRepository>();
+builder.Services.AddScoped<IСделкаПоставщикаRepository, СделкаПоставщикаRepository>();
+builder.Services.AddScoped<IПолученныйТоварRepository, ПолученныйТоварRepository>();
+builder.Services.AddScoped<IОтданныеДеньгиRepository, ОтданныеДеньгиRepository>();
 builder.Services.AddScoped<IСкладRepository, СкладRepository>();
 builder.Services.AddScoped<IClientVoiceSearchService, ClientVoiceSearchService>();
 

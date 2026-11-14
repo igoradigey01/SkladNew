@@ -45,6 +45,10 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Приход_Оста
 GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Приход_Поставщик' AND object_id = OBJECT_ID(N'dbo.Приход'))
     CREATE NONCLUSTERED INDEX IX_Приход_Поставщик ON dbo.Приход (ПоставщикId, Date);
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Приход_КодСделкиПоставщика' AND object_id = OBJECT_ID(N'dbo.Приход'))
+    CREATE NONCLUSTERED INDEX IX_Приход_КодСделкиПоставщика ON dbo.Приход (КодСделкиПоставщика)
+        INCLUDE (Date, Sum, UETR);
 GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Приход_Склад' AND object_id = OBJECT_ID(N'dbo.Приход'))
     CREATE NONCLUSTERED INDEX IX_Приход_Склад ON dbo.Приход (СкладId);
@@ -76,6 +80,13 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Деньги_Date' AN
 GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Деньги_Контрагент' AND object_id = OBJECT_ID(N'dbo.Деньги'))
     CREATE NONCLUSTERED INDEX IX_Деньги_Контрагент ON dbo.Деньги (CounterpartyType, CounterpartyId, Date);
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Деньги_КодСделкиПоставщика' AND object_id = OBJECT_ID(N'dbo.Деньги'))
+    CREATE NONCLUSTERED INDEX IX_Деньги_КодСделкиПоставщика ON dbo.Деньги (КодСделкиПоставщика)
+        INCLUDE (Date, Sum, OperationType);
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_СделкаПоставщика_Поставщик' AND object_id = OBJECT_ID(N'dbo.СделкаПоставщика'))
+    CREATE NONCLUSTERED INDEX IX_СделкаПоставщика_Поставщик ON dbo.СделкаПоставщика (ПоставщикId, Дата);
 GO
 
 /* ===========================================================================

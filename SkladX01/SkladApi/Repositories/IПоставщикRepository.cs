@@ -8,4 +8,6 @@ public interface IПоставщикRepository
         string? query, string sort, bool descending);
 
     Task<ПоставщикDto?> GetByIdAsync(int id);
+
+    Task<ПоставщикSummaryDto?> GetSummaryAsync(int id);
 }
