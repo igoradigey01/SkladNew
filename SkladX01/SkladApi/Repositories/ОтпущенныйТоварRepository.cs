@@ -49,4 +49,49 @@ public class ОтпущенныйТоварRepository : IОтпущенныйТ�
 
         return products.ToList();
     }
+
+    public async Task<bool> InvoiceBelongsToDealAsync(
+        Guid dealId,
+        int invoiceId,
+        CancellationToken cancellationToken = default)
+    {
+        const string sql = """
+            SELECT TOP 1 1
+            FROM dbo.[НакладнаяРасход] AS n
+            WHERE n.[Id] = @invoiceId
+              AND n.[КодСделки] = @dealId
+            """;
+
+        await using var connection = new SqlConnection(_connectionString);
+        var found = await connection.QueryFirstOrDefaultAsync<int?>(
+            new CommandDefinition(
+                sql, new { dealId, invoiceId }, cancellationToken: cancellationToken));
+
+        return found is not null;
+    }
+
+    public async Task<IReadOnlyList<СтрокаНакладнойDto>> GetRowsAsync(
+        int invoiceId,
+        CancellationToken cancellationToken = default)
+    {
+        const string sql = """
+            SELECT r.[Id] AS Id,
+                   r.[НоменклатураId] AS НоменклатураId,
+                   n.[Название] AS Номенклатура,
+                   r.[Quantity] AS Количество,
+                   r.[Price] AS Цена,
+                   r.[Sum] AS Сумма
+            FROM dbo.[Расход] AS r
+            INNER JOIN dbo.[Номенклатура] AS n ON n.[Id] = r.[НоменклатураId]
+            WHERE r.[НакладнаяId] = @invoiceId
+            ORDER BY r.[Id]
+            """;
+
+        await using var connection = new SqlConnection(_connectionString);
+        var rows = await connection.QueryAsync<СтрокаНакладнойDto>(
+            new CommandDefinition(
+                sql, new { invoiceId }, cancellationToken: cancellationToken));
+
+        return rows.ToList();
+    }
 }

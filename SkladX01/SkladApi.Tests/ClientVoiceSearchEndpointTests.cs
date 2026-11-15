@@ -75,7 +75,9 @@ public class ClientVoiceSearchEndpointTests
             null!,
             null!,
             null!,
-            new StubVoiceSearch(candidates ?? []));
+            new StubVoiceSearch(candidates ?? []),
+            null!,
+            null!);
 
     private sealed class StubClients : IКлиентRepository
     {

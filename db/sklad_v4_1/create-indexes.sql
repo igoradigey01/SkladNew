@@ -212,6 +212,13 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Деньги_КодС
     CREATE NONCLUSTERED INDEX IX_Деньги_КодСделки ON dbo.Деньги (КодСделки, Date)
         INCLUDE ([Sum], OperationType, CounterpartyId);
 GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_AuditLog_Entity' AND object_id = OBJECT_ID(N'dbo.AuditLog'))
+    CREATE NONCLUSTERED INDEX IX_AuditLog_Entity ON dbo.AuditLog (EntityType, EntityId)
+        INCLUDE (Timestamp);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_AuditLog_Timestamp' AND object_id = OBJECT_ID(N'dbo.AuditLog'))
+    CREATE NONCLUSTERED INDEX IX_AuditLog_Timestamp ON dbo.AuditLog (Timestamp DESC);
+GO
 
 PRINT N'Индексы Sklad-v4.1 созданы';
 GO

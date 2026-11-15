@@ -763,5 +763,29 @@ CREATE TABLE dbo.Расхождение
 );
 GO
 
+/* ---------------------------------------------------------------------------
+   ЖУРНАЛ АУДИТА
+
+   История изменений накладных и платежей. Без FK на сотрудника: Сотрудник
+   живёт в Sklad_v1_HR, поэтому Id и имя денормализованы. OldData/NewData —
+   JSON-снимки состояния до и после изменения.
+   ------------------------------------------------------------------------- */
+CREATE TABLE dbo.AuditLog
+(
+    Id                    bigint IDENTITY(1, 1) NOT NULL,
+    EntityType            nvarchar(100) NOT NULL,   -- Invoice | Payment
+    EntityId              bigint NOT NULL,
+    Action                nvarchar(20) NOT NULL,    -- Update
+    ChangedByEmployeeId   bigint NOT NULL,
+    ChangedByEmployeeName nvarchar(200) NOT NULL,
+    Timestamp             datetime2 NOT NULL
+                          CONSTRAINT DF_AuditLog_Timestamp DEFAULT (SYSUTCDATETIME()),
+    OldData               nvarchar(max) NULL,
+    NewData               nvarchar(max) NULL,
+
+    CONSTRAINT PK_AuditLog PRIMARY KEY CLUSTERED (Id)
+);
+GO
+
 PRINT N'БД Sklad-v4.1: таблицы созданы (кадры — в Sklad_v1_HR). Далее create-indexes.sql';
 GO

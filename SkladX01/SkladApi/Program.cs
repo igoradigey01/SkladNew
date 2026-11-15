@@ -33,6 +33,10 @@ builder.Services.AddScoped<IОтданныеДеньгиRepository, Отданн
 builder.Services.AddScoped<IСкладRepository, СкладRepository>();
 builder.Services.AddScoped<IClientVoiceSearchService, ClientVoiceSearchService>();
 
+builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+builder.Services.AddScoped<IEmployeeContext, EmployeeContext>();
+builder.Services.AddScoped<IAuditService, AuditService>();
+
 builder.Services.Configure<OllamaSettings>(
     builder.Configuration.GetSection(OllamaSettings.SectionName));
 

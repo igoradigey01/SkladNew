@@ -294,6 +294,25 @@ erDiagram
 | `ДатаСоздания` | `datetime` | для перенесённых — дата первой сделки в эталоне |
 | `Активен` | `bit` | 1 — клиент активен |
 
+### `AuditLog`
+
+Технический журнал изменений накладных и платежей. Без FK на `Сотрудник`:
+кадровая база отдельная, поэтому Id и имя сотрудника денормализованы.
+
+| Колонка | Тип | Что это |
+|---------|-----|---------|
+| `Id` | `bigint IDENTITY` | PK |
+| `EntityType` | `nvarchar(100)` | `Invoice` (накладная) или `Payment` (платёж) |
+| `EntityId` | `bigint` | id накладной (`НакладнаяРасход.Id`) или платежа (`Деньги.Id`) |
+| `Action` | `nvarchar(20)` | `Update` |
+| `ChangedByEmployeeId` | `bigint` | `Сотрудник.Id` из `Sklad_v1_HR` (при моке — из конфига) |
+| `ChangedByEmployeeName` | `nvarchar(200)` | имя на момент изменения |
+| `Timestamp` | `datetime2` | время изменения, UTC |
+| `OldData` | `nvarchar(max)` | JSON-снимок до изменения (для накладной — все строки) |
+| `NewData` | `nvarchar(max)` | JSON-снимок после изменения |
+
+Индексы: `IX_AuditLog_Entity (EntityType, EntityId)`, `IX_AuditLog_Timestamp`.
+
 ## Представления
 
 ### `vw_БалансСделки`
@@ -361,6 +380,7 @@ erDiagram
 | `create-triggers.sql` | проверки характеристик + согласованность сделок |
 | `create-views.sql` | `vw_ЗначенияХарактеристик` + представления баланса |
 | `alter-supplier-deals.sql` | сделки поставщика: таблица, колонки, триггеры, представление, демо-выплаты |
+| `alter-audit-log.sql` | журнал аудита `AuditLog` и его индексы |
 | `insert-reference-data.sql` | справочники и 53 клиента |
 | `migrate-movements-from-Sh_29-06-25.sql` | приход, расход, деньги, ревизии |
 | `migrate-settlements-from-Sh_29-06-25.sql` | сделки, шапки накладных, привязка |

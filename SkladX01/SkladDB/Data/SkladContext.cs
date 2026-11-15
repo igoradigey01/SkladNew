@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using SkladDB.Models;
 using SkladDB.Services;
@@ -32,6 +32,7 @@ public class SkladContext : DbContext
     public DbSet<Клиент> Клиенты => Set<Клиент>();
     public DbSet<Поставщик> Поставщики => Set<Поставщик>();
     public DbSet<Склад> Склады => Set<Склад>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     public override int SaveChanges()
     {
@@ -65,7 +66,7 @@ public class SkladContext : DbContext
 
         modelBuilder.Entity<Приход>(entity =>
         {
-            entity.ToTable("Приход");
+            entity.ToTable("Приход", table => table.HasTrigger("TR_Приход_Проверка"));
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).ValueGeneratedOnAdd();
             entity.Property(e => e.Date).HasColumnType("datetime");
@@ -78,7 +79,7 @@ public class SkladContext : DbContext
 
         modelBuilder.Entity<Расход>(entity =>
         {
-            entity.ToTable("Расход");
+            entity.ToTable("Расход", table => table.HasTrigger("TR_Расход_Проверка"));
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).ValueGeneratedOnAdd();
             entity.Property(e => e.Date).HasColumnType("datetime");
@@ -91,7 +92,7 @@ public class SkladContext : DbContext
 
         modelBuilder.Entity<Деньги>(entity =>
         {
-            entity.ToTable("Деньги");
+            entity.ToTable("Деньги", table => table.HasTrigger("TR_Деньги_Проверка"));
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).ValueGeneratedOnAdd();
             entity.Property(e => e.Date).HasColumnType("datetime");
@@ -105,7 +106,7 @@ public class SkladContext : DbContext
 
         modelBuilder.Entity<НакладнаяРасход>(entity =>
         {
-            entity.ToTable("НакладнаяРасход");
+            entity.ToTable("НакладнаяРасход", table => table.HasTrigger("TR_НакладнаяРасход_Проверка"));
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).ValueGeneratedOnAdd();
             entity.Property(e => e.Номер).HasMaxLength(40).IsRequired();
@@ -207,6 +208,21 @@ public class SkladContext : DbContext
             entity.Property(e => e.Название).HasMaxLength(100).IsRequired();
             entity.Property(e => e.Псевдоним).HasMaxLength(20).IsRequired();
             ConfigureAudit(entity);
+        });
+
+        modelBuilder.Entity<AuditLog>(entity =>
+        {
+            entity.ToTable("AuditLog");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
+            entity.Property(e => e.EntityType).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Action).HasMaxLength(20).IsRequired();
+            entity.Property(e => e.ChangedByEmployeeName).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.Timestamp)
+                .HasColumnType("datetime2")
+                .HasDefaultValueSql("SYSUTCDATETIME()");
+            entity.HasIndex(e => e.Timestamp);
+            entity.HasIndex(e => new { e.EntityType, e.EntityId });
         });
     }
 

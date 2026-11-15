@@ -45,4 +45,27 @@ public class ПринятыеДеньгиRepository : IПринятыеДень�
 
         return payments.ToList();
     }
+
+    public async Task<ПринятыеДеньгиDto?> GetByIdAsync(
+        Guid dealId,
+        int paymentId,
+        CancellationToken cancellationToken = default)
+    {
+        const string sql = """
+            SELECT m.[Id] AS Id,
+                   m.[Date] AS Дата,
+                   m.[Sum] AS Сумма,
+                   s.[КодСделки] AS [СделкаId]
+            FROM dbo.[Деньги] AS m
+            INNER JOIN dbo.[Сделка] AS s
+                ON s.[КодСделки] = m.[КодСделки]
+            WHERE m.[Id] = @paymentId
+              AND s.[КодСделки] = @dealId
+            """;
+
+        await using var connection = new SqlConnection(_connectionString);
+        return await connection.QueryFirstOrDefaultAsync<ПринятыеДеньгиDto>(
+            new CommandDefinition(
+                sql, new { dealId, paymentId }, cancellationToken: cancellationToken));
+    }
 }
