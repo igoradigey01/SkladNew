@@ -6,4 +6,7 @@ public class ПринятыеДеньгиDto
     public DateTime Дата { get; set; }
     public decimal Сумма { get; set; }
     public Guid СделкаId { get; set; }
+
+    /// <summary>Есть хотя бы одна запись в журнале аудита.</summary>
+    public bool Изменялась { get; set; }
 }

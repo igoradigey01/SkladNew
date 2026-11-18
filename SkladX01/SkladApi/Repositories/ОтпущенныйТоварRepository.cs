@@ -33,7 +33,13 @@ public class ОтпущенныйТоварRepository : IОтпущенныйТ�
                    n.[Номер] AS Номер,
                    n.[Дата] AS Дата,
                    CAST(SUM(r.[Sum]) AS decimal(18, 2)) AS Сумма,
-                   s.[КодСделки] AS [СделкаId]
+                   s.[КодСделки] AS [СделкаId],
+                   CAST(CASE WHEN EXISTS
+                   (
+                       SELECT 1 FROM dbo.[AuditLog] AS a
+                       WHERE a.[EntityType] = N'Invoice'
+                         AND a.[EntityId] = n.[Id]
+                   ) THEN 1 ELSE 0 END AS bit) AS Изменялась
             FROM dbo.[НакладнаяРасход] AS n
             INNER JOIN dbo.[Расход] AS r
                 ON r.[НакладнаяId] = n.[Id]

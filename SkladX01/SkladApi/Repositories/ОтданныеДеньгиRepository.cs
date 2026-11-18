@@ -32,7 +32,13 @@ public class ОтданныеДеньгиRepository : IОтданныеДень�
             SELECT m.[Id] AS Id,
                    m.[Date] AS Дата,
                    m.[Sum] AS Сумма,
-                   s.[КодСделки] AS [СделкаId]
+                   s.[КодСделки] AS [СделкаId],
+                   CAST(CASE WHEN EXISTS
+                   (
+                       SELECT 1 FROM dbo.[AuditLog] AS a
+                       WHERE a.[EntityType] = N'SupplierPayment'
+                         AND a.[EntityId] = m.[Id]
+                   ) THEN 1 ELSE 0 END AS bit) AS Изменялась
             FROM dbo.[Деньги] AS m
             INNER JOIN dbo.[СделкаПоставщика] AS s
                 ON s.[КодСделки] = m.[КодСделкиПоставщика]
@@ -45,5 +51,30 @@ public class ОтданныеДеньгиRepository : IОтданныеДень�
             sql, new { dealId });
 
         return payments.ToList();
+    }
+
+    public async Task<ОтданныеДеньгиDto?> GetByIdAsync(
+        Guid dealId,
+        int paymentId,
+        CancellationToken cancellationToken = default)
+    {
+        const string sql = """
+            SELECT m.[Id] AS Id,
+                   m.[Date] AS Дата,
+                   m.[Sum] AS Сумма,
+                   s.[КодСделки] AS [СделкаId]
+            FROM dbo.[Деньги] AS m
+            INNER JOIN dbo.[СделкаПоставщика] AS s
+                ON s.[КодСделки] = m.[КодСделкиПоставщика]
+            WHERE s.[КодСделки] = @dealId
+              AND m.[Id] = @paymentId
+            """;
+
+        await using var connection = new SqlConnection(_connectionString);
+        var payment = await connection.QueryFirstOrDefaultAsync<ОтданныеДеньгиDto>(
+            new CommandDefinition(
+                sql, new { dealId, paymentId }, cancellationToken: cancellationToken));
+
+        return payment;
     }
 }

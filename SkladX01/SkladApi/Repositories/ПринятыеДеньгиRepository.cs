@@ -32,7 +32,13 @@ public class ПринятыеДеньгиRepository : IПринятыеДень�
             SELECT m.[Id] AS Id,
                    m.[Date] AS Дата,
                    m.[Sum] AS Сумма,
-                   s.[КодСделки] AS [СделкаId]
+                   s.[КодСделки] AS [СделкаId],
+                   CAST(CASE WHEN EXISTS
+                   (
+                       SELECT 1 FROM dbo.[AuditLog] AS a
+                       WHERE a.[EntityType] = N'Payment'
+                         AND a.[EntityId] = m.[Id]
+                   ) THEN 1 ELSE 0 END AS bit) AS Изменялась
             FROM dbo.[Деньги] AS m
             INNER JOIN dbo.[Сделка] AS s
                 ON s.[КодСделки] = m.[КодСделки]
