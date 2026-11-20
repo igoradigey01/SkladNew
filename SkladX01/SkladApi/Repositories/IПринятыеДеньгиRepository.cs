@@ -10,4 +10,9 @@ public interface IПринятыеДеньгиRepository
         Guid dealId,
         int paymentId,
         CancellationToken cancellationToken = default);
+
+    Task<СозданиеПлатежаРезультат> CreateAsync(
+        Guid dealId,
+        СоздатьПлатежDto dto,
+        CancellationToken cancellationToken = default);
 }

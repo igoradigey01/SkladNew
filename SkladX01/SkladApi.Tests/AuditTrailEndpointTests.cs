@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using SkladApi.Controllers;
 using SkladApi.Dtos;
 using SkladApi.Repositories;
@@ -301,7 +302,8 @@ public class AuditTrailEndpointTests
             new FakeVoiceSearch(),
             new AuditService(context, new FakeEmployeeContext(
                 employee ?? new EmployeeInfo(1, "Сидорова Мария Ивановна"))),
-            context);
+            context,
+            NullLogger<КлиентController>.Instance);
 
         return (controller, context, audit);
     }
@@ -379,6 +381,15 @@ public class AuditTrailEndpointTests
         public Task<IReadOnlyList<СтрокаНакладнойDto>> GetRowsAsync(
             int invoiceId, CancellationToken cancellationToken = default) =>
             Task.FromResult(_rows);
+
+        public Task<СозданиеНакладнойРезультат> CreateAsync(
+            Guid dealId,
+            DateTime? date,
+            string? comment,
+            IReadOnlyList<СоздатьСтрокуНакладнойDto> rows,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new СозданиеНакладнойРезультат(
+                СозданиеНакладнойСтатус.СделкаНеНайдена));
     }
 
     private sealed class FakeПринятыеДеньгиRepository : IПринятыеДеньгиRepository
@@ -394,6 +405,13 @@ public class AuditTrailEndpointTests
         public Task<ПринятыеДеньгиDto?> GetByIdAsync(
             Guid dealId, int paymentId, CancellationToken cancellationToken = default) =>
             Task.FromResult(_payment);
+
+        public Task<СозданиеПлатежаРезультат> CreateAsync(
+            Guid dealId,
+            СоздатьПлатежDto dto,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new СозданиеПлатежаРезультат(
+                СозданиеПлатежаСтатус.СделкаНеНайдена));
     }
 
     private sealed class FakeAuditLogRepository : IAuditLogRepository

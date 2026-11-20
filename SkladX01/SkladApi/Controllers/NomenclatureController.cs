@@ -10,6 +10,12 @@ namespace SkladApi.Controllers;
 [Route("api/nomenclature")]
 public class NomenclatureController : ControllerBase
 {
+    // Ограничения dbo.Номенклатура: long values otherwise fail with SQL 2628.
+    private const int МаксимальнаяДлинаКода = 20;
+    private const int МаксимальнаяДлинаНазвания = 200;
+    private const int МаксимальнаяДлинаАртикула = 50;
+    private const int МаксимальнаяДлинаКраткогоНазвания = 50;
+
     private readonly IНоменклатураRepository _номенклатура;
     private readonly OllamaEmbeddingService _embeddings;
     private readonly ILogger<NomenclatureController> _logger;
@@ -187,6 +193,24 @@ public class NomenclatureController : ControllerBase
         return Ok(rows);
     }
 
+    /// <summary>Следующий свободный код для быстрого создания позиции.</summary>
+    [HttpGet("next-code")]
+    public async Task<IActionResult> NextCode()
+    {
+        try
+        {
+            return Ok(new { код = await _номенклатура.GetNextCodeAsync() });
+        }
+        catch (SqlException exception)
+        {
+            _logger.LogError(exception, "Не удалось вычислить следующий код номенклатуры");
+
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { error = "Справочник номенклатуры недоступен: проверьте SQL Server." });
+        }
+    }
+
     /// <summary>Справочники для быстрого создания номенклатуры «на лету».</summary>
     [HttpGet("references")]
     public async Task<ActionResult<НоменклатураReferencesDto>> References()
@@ -220,10 +244,29 @@ public class NomenclatureController : ControllerBase
         {
             ошибки.Add("Код обязателен.");
         }
+        else if (request.Код.Trim().Length > МаксимальнаяДлинаКода)
+        {
+            ошибки.Add($"Код длиннее {МаксимальнаяДлинаКода} символов.");
+        }
 
         if (string.IsNullOrWhiteSpace(request.Название))
         {
             ошибки.Add("Название обязательно.");
+        }
+        else if (request.Название.Trim().Length > МаксимальнаяДлинаНазвания)
+        {
+            ошибки.Add($"Название длиннее {МаксимальнаяДлинаНазвания} символов.");
+        }
+
+        if (request.Артикул?.Trim().Length > МаксимальнаяДлинаАртикула)
+        {
+            ошибки.Add($"Артикул длиннее {МаксимальнаяДлинаАртикула} символов.");
+        }
+
+        if (request.КраткоеНазвание?.Trim().Length > МаксимальнаяДлинаКраткогоНазвания)
+        {
+            ошибки.Add(
+                $"Краткое название длиннее {МаксимальнаяДлинаКраткогоНазвания} символов.");
         }
 
         if (request.БазоваяЕдИзмId <= 0)
@@ -246,7 +289,21 @@ public class NomenclatureController : ControllerBase
             ошибки.Add("Характеристики допустимы только при выбранном виде номенклатуры.");
         }
 
-        if (ошибки.Count == 0 && request.ВидНоменклатурыId is int видId)
+        var дубли = request.Характеристики
+            .GroupBy(item => item.ХарактеристикаId)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToList();
+
+        if (дубли.Count > 0)
+        {
+            ошибки.Add(
+                $"Характеристики указаны дважды: {string.Join(", ", дубли)}.");
+        }
+
+        if (дубли.Count == 0
+            && ошибки.Count == 0
+            && request.ВидНоменклатурыId is int видId)
         {
             ошибки.AddRange(await ValidateCharacteristicsAsync(видId, request));
         }
@@ -277,6 +334,50 @@ public class NomenclatureController : ControllerBase
                 код = request.Код.Trim(),
             });
         }
+        catch (SqlException exception) when (exception.Number is 547)
+        {
+            _logger.LogWarning(exception, "Создание номенклатуры: нарушена ссылка");
+
+            return BadRequest(new
+            {
+                error = "Связанный справочник не найден.",
+                details = new[]
+                {
+                    "Проверьте единицу измерения, группу, категорию и вид номенклатуры.",
+                },
+            });
+        }
+        catch (SqlException exception) when (exception.Number is 2628 or 8152)
+        {
+            _logger.LogWarning(exception, "Создание номенклатуры: значение слишком длинное");
+
+            return BadRequest(new
+            {
+                error = "Значение не помещается в поле базы данных.",
+                details = new[] { "Сократите название, код или артикул." },
+            });
+        }
+        catch (SqlException exception) when (exception.Number >= 50000)
+        {
+            _logger.LogWarning(
+                exception, "Создание номенклатуры отклонено базой (код {Number})",
+                exception.Number);
+
+            return BadRequest(new
+            {
+                error = "База данных отклонила значения.",
+                details = new[] { exception.Message },
+            });
+        }
+        catch (SqlException exception)
+        {
+            _logger.LogError(exception, "Создание номенклатуры: ошибка SQL {Number}",
+                exception.Number);
+
+            return StatusCode(
+                StatusCodes.Status500InternalServerError,
+                new { error = "Ошибка базы данных при создании позиции." });
+        }
     }
 
     private async Task<IEnumerable<string>> ValidateCharacteristicsAsync(
@@ -287,7 +388,7 @@ public class NomenclatureController : ControllerBase
         var allowed = await _номенклатура.GetCharacteristicsAsync(видId);
         var provided = request.Характеристики
             .GroupBy(item => item.ХарактеристикаId)
-            .ToDictionary(group => group.Key, group => group.First().Значение);
+            .ToDictionary(group => group.Key, group => group.First().Значение.Trim());
 
         foreach (var unknown in provided.Keys.Where(id => allowed.All(item => item.Id != id)))
         {

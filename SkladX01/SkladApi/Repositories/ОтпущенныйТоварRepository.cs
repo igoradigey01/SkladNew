@@ -100,4 +100,146 @@ public class ОтпущенныйТоварRepository : IОтпущенныйТ�
 
         return rows.ToList();
     }
+
+    public async Task<СозданиеНакладнойРезультат> CreateAsync(
+        Guid dealId,
+        DateTime? date,
+        string? comment,
+        IReadOnlyList<СоздатьСтрокуНакладнойDto> rows,
+        CancellationToken cancellationToken = default)
+    {
+        var дата = date ?? DateTime.Now;
+        var uetr = Guid.NewGuid();
+        var номер = "О-" + uetr.ToString("N")[^6..].ToUpperInvariant();
+        var комментарий = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
+
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            var clientId = await connection.QueryFirstOrDefaultAsync<int?>(
+                new CommandDefinition(
+                    "SELECT [КлиентId] FROM dbo.[Сделка] WHERE [КодСделки] = @dealId",
+                    new { dealId },
+                    transaction,
+                    cancellationToken: cancellationToken));
+
+            if (clientId is null)
+            {
+                return new СозданиеНакладнойРезультат(
+                    СозданиеНакладнойСтатус.СделкаНеНайдена);
+            }
+
+            var warehouseId = await connection.QueryFirstOrDefaultAsync<int?>(
+                new CommandDefinition(
+                    "SELECT TOP 1 [Id] FROM dbo.[Склад] ORDER BY [Id]",
+                    transaction: transaction,
+                    cancellationToken: cancellationToken));
+
+            if (warehouseId is null)
+            {
+                return new СозданиеНакладнойРезультат(
+                    СозданиеНакладнойСтатус.НетСклада);
+            }
+
+            var ids = rows
+                .Select(row => row.НоменклатураId)
+                .Distinct()
+                .ToArray();
+
+            var existing = (await connection.QueryAsync<int>(
+                new CommandDefinition(
+                    "SELECT [Id] FROM dbo.[Номенклатура] WHERE [Id] IN @ids",
+                    new { ids },
+                    transaction,
+                    cancellationToken: cancellationToken))).ToHashSet();
+
+            var missing = ids
+                .Where(id => !existing.Contains(id))
+                .Select(id => (int?)id)
+                .FirstOrDefault();
+
+            if (missing is not null)
+            {
+                return new СозданиеНакладнойРезультат(
+                    СозданиеНакладнойСтатус.НоменклатураНеНайдена,
+                    НоменклатураId: missing);
+            }
+
+            // OUTPUT без INTO нельзя: на шапке висит триггер проверки клиента.
+            var invoiceId = await connection.QuerySingleAsync<int>(
+                new CommandDefinition(
+                    """
+                    DECLARE @Ids TABLE ([Id] int);
+
+                    INSERT INTO dbo.[НакладнаяРасход]
+                        ([UETR], [Номер], [Дата], [КлиентId], [КодСделки], [Комментарий])
+                    OUTPUT INSERTED.[Id] INTO @Ids
+                    VALUES (@uetr, @номер, @дата, @clientId, @dealId, @комментарий);
+
+                    SELECT [Id] FROM @Ids;
+                    """,
+                    new { uetr, номер, дата, clientId, dealId, комментарий },
+                    transaction,
+                    cancellationToken: cancellationToken));
+
+            var lines = rows.Select(row => new
+            {
+                row.НоменклатураId,
+                row.Количество,
+                row.Цена,
+                Sum = Math.Round(
+                    row.Количество * row.Цена, 2, MidpointRounding.AwayFromZero),
+            }).ToArray();
+
+            await connection.ExecuteAsync(
+                new CommandDefinition(
+                    """
+                    INSERT INTO dbo.[Расход]
+                        ([UETR], [Date], [Type], [КлиентId], [НакладнаяId],
+                         [НоменклатураId], [СкладId], [Quantity], [Price], [Sum])
+                    VALUES
+                        (@uetr, @дата, 1, @clientId, @invoiceId,
+                         @НоменклатураId, @warehouseId, @Количество, @Цена, @Sum)
+                    """,
+                    lines.Select(line => new
+                    {
+                        uetr,
+                        дата,
+                        clientId,
+                        invoiceId,
+                        warehouseId,
+                        line.НоменклатураId,
+                        line.Количество,
+                        line.Цена,
+                        line.Sum,
+                    }),
+                    transaction,
+                    cancellationToken: cancellationToken));
+
+            var сумма = Math.Round(
+                lines.Sum(line => line.Sum), 2, MidpointRounding.AwayFromZero);
+
+            await transaction.CommitAsync(cancellationToken);
+
+            return new СозданиеНакладнойРезультат(
+                СозданиеНакладнойСтатус.Успех,
+                new ОтпущенныйТоварDto
+                {
+                    Id = invoiceId,
+                    Номер = номер,
+                    Дата = дата,
+                    Сумма = сумма,
+                    СделкаId = dealId,
+                    Изменялась = false,
+                });
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            throw;
+        }
+    }
 }

@@ -145,6 +145,8 @@ public class InvoiceControllerTests
             string query, int limit) =>
             Task.FromResult<IReadOnlyList<НоменклатураQuickDto>>([]);
 
+        public Task<string> GetNextCodeAsync() => Task.FromResult("НМ-00001");
+
         public Task<НоменклатураReferencesDto> GetReferencesAsync() =>
             Task.FromResult(new НоменклатураReferencesDto());
 

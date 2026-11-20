@@ -19,6 +19,9 @@ builder.Services.AddScoped<ICurrentUserService, HttpCurrentUserService>();
 
 builder.Services.Configure<EmailSettings>(
     builder.Configuration.GetSection(EmailSettings.SectionName));
+builder.Services.Configure<WhisperSettings>(
+    builder.Configuration.GetSection(WhisperSettings.SectionName));
+builder.Services.AddSingleton<IWhisperTranscriber, WhisperTranscriber>();
 builder.Services.AddScoped<IEmailSender, EmailSender>();
 
 builder.Services.AddScoped<IКлиентRepository, КлиентRepository>();
@@ -32,6 +35,12 @@ builder.Services.AddScoped<IПолученныйТоварRepository, Получ
 builder.Services.AddScoped<IОтданныеДеньгиRepository, ОтданныеДеньгиRepository>();
 builder.Services.AddScoped<IСкладRepository, СкладRepository>();
 builder.Services.AddScoped<IClientVoiceSearchService, ClientVoiceSearchService>();
+builder.Services.AddHttpClient<IMultimodalRecognitionService, MultimodalRecognitionService>((services, client) =>
+{
+    var ollama = services.GetRequiredService<IOptions<OllamaSettings>>().Value;
+    client.Timeout = TimeSpan.FromSeconds(ollama.TimeoutSeconds);
+    client.BaseAddress = new Uri(ollama.BaseUrl);
+});
 
 builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 builder.Services.AddScoped<IEmployeeContext, EmployeeContext>();
@@ -68,6 +77,8 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
+WarnIfWhisperMissing(app);
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -94,4 +105,25 @@ static string RequireConnection(IConfiguration configuration, string name)
     }
 
     return value;
+}
+
+static void WarnIfWhisperMissing(WebApplication app)
+{
+    var transcriber = app.Services.GetRequiredService<IWhisperTranscriber>();
+
+    if (transcriber.IsAvailable)
+    {
+        return;
+    }
+
+    var message =
+        $"Модель Whisper не найдена: {transcriber.ModelPath}. " +
+        "/api/recognition/parse будет отвечать 503.";
+
+    if (app.Configuration.GetValue<bool>("Whisper:Required"))
+    {
+        throw new InvalidOperationException(message);
+    }
+
+    app.Logger.LogWarning("{Message}", message);
 }

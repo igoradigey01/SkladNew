@@ -1,5 +1,6 @@
 using System.Reflection;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging.Abstractions;
 using SkladApi.Controllers;
 using SkladApi.Dtos;
 using SkladApi.Repositories;
@@ -77,7 +78,8 @@ public class ClientVoiceSearchEndpointTests
             null!,
             new StubVoiceSearch(candidates ?? []),
             null!,
-            null!);
+            null!,
+            NullLogger<КлиентController>.Instance);
 
     private sealed class StubClients : IКлиентRepository
     {

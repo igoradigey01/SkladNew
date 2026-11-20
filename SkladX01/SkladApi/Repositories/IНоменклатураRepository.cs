@@ -20,6 +20,9 @@ public interface IНоменклатураRepository
     /// <summary>Быстрый поиск по Код/Артикул/Название для ввода в документ.</summary>
     Task<IReadOnlyList<НоменклатураQuickDto>> QuickSearchAsync(string query, int limit);
 
+    /// <summary>Следующий свободный код вида НМ-00042 (по максимальному существующему).</summary>
+    Task<string> GetNextCodeAsync();
+
     /// <summary>Справочники для быстрого создания: группы, виды, категории, единицы.</summary>
     Task<НоменклатураReferencesDto> GetReferencesAsync();
 

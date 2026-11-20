@@ -33,6 +33,9 @@ public class ПринятыеДеньгиRepository : IПринятыеДень�
                    m.[Date] AS Дата,
                    m.[Sum] AS Сумма,
                    s.[КодСделки] AS [СделкаId],
+                   m.[PaymentMethod] AS СпособОплаты,
+                   m.[НомерДокумента] AS НомерДокумента,
+                   m.[Comment] AS Комментарий,
                    CAST(CASE WHEN EXISTS
                    (
                        SELECT 1 FROM dbo.[AuditLog] AS a
@@ -61,7 +64,10 @@ public class ПринятыеДеньгиRepository : IПринятыеДень�
             SELECT m.[Id] AS Id,
                    m.[Date] AS Дата,
                    m.[Sum] AS Сумма,
-                   s.[КодСделки] AS [СделкаId]
+                   s.[КодСделки] AS [СделкаId],
+                   m.[PaymentMethod] AS СпособОплаты,
+                   m.[НомерДокумента] AS НомерДокумента,
+                   m.[Comment] AS Комментарий
             FROM dbo.[Деньги] AS m
             INNER JOIN dbo.[Сделка] AS s
                 ON s.[КодСделки] = m.[КодСделки]
@@ -73,5 +79,84 @@ public class ПринятыеДеньгиRepository : IПринятыеДень�
         return await connection.QueryFirstOrDefaultAsync<ПринятыеДеньгиDto>(
             new CommandDefinition(
                 sql, new { dealId, paymentId }, cancellationToken: cancellationToken));
+    }
+
+    public async Task<СозданиеПлатежаРезультат> CreateAsync(
+        Guid dealId,
+        СоздатьПлатежDto dto,
+        CancellationToken cancellationToken = default)
+    {
+        var дата = dto.Дата ?? DateTime.Now;
+        var сумма = Math.Round(dto.Сумма, 2, MidpointRounding.AwayFromZero);
+        var способ = dto.СпособОплаты ?? 1;
+        var номер = string.IsNullOrWhiteSpace(dto.НомерДокумента)
+            ? null
+            : dto.НомерДокумента.Trim();
+        var комментарий = string.IsNullOrWhiteSpace(dto.Комментарий)
+            ? null
+            : dto.Комментарий.Trim();
+
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            var clientId = await connection.QueryFirstOrDefaultAsync<int?>(
+                new CommandDefinition(
+                    "SELECT [КлиентId] FROM dbo.[Сделка] WHERE [КодСделки] = @dealId",
+                    new { dealId },
+                    transaction,
+                    cancellationToken: cancellationToken));
+
+            if (clientId is null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+
+                return new СозданиеПлатежаРезультат(
+                    СозданиеПлатежаСтатус.СделкаНеНайдена);
+            }
+
+            // OUTPUT без INTO нельзя: на таблице висит триггер проверки контрагента.
+            var paymentId = await connection.QuerySingleAsync<int>(
+                new CommandDefinition(
+                    """
+                    DECLARE @Ids TABLE ([Id] int);
+
+                    INSERT INTO dbo.[Деньги]
+                        ([UETR], [Date], [OperationType], [CounterpartyId],
+                         [CounterpartyType], [КодСделки], [Sum], [PaymentMethod],
+                         [НомерДокумента], [Comment])
+                    OUTPUT INSERTED.[Id] INTO @Ids
+                    VALUES (NEWID(), @дата, 1, @clientId, 1, @dealId, @сумма,
+                            @способ, @номер, @комментарий);
+
+                    SELECT [Id] FROM @Ids;
+                    """,
+                    new { дата, clientId, dealId, сумма, способ, номер, комментарий },
+                    transaction,
+                    cancellationToken: cancellationToken));
+
+            await transaction.CommitAsync(cancellationToken);
+
+            return new СозданиеПлатежаРезультат(
+                СозданиеПлатежаСтатус.Успех,
+                new ПринятыеДеньгиDto
+                {
+                    Id = paymentId,
+                    Дата = дата,
+                    Сумма = сумма,
+                    СделкаId = dealId,
+                    СпособОплаты = способ,
+                    НомерДокумента = номер,
+                    Комментарий = комментарий,
+                    Изменялась = false,
+                });
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            throw;
+        }
     }
 }

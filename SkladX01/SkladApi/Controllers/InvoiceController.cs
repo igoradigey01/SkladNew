@@ -15,40 +15,6 @@ public class InvoiceController : ControllerBase
     private const int MatchThreshold = 75;
     private const int MaxTextLength = 4000;
 
-    private static readonly string[] ItemsPropertyNames = ["items", "rows", "data", "result"];
-
-    private static readonly JsonSerializerOptions ItemJsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-    };
-
-    /// <summary>
-    /// JSON-схема ответа модели: без неё qwen2.5 отдавала один объект вместо массива.
-    /// </summary>
-    private static readonly object InvoiceSchema = new
-    {
-        type = "object",
-        properties = new
-        {
-            items = new
-            {
-                type = "array",
-                items = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        raw_name = new { type = "string" },
-                        quantity = new { type = "number" },
-                        unit = new { type = "string" },
-                    },
-                    required = new[] { "raw_name", "quantity", "unit" },
-                },
-            },
-        },
-        required = new[] { "items" },
-    };
-
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IНоменклатураRepository _номенклатура;
     private readonly OllamaSettings _ollama;
@@ -157,7 +123,7 @@ public class InvoiceController : ControllerBase
             ["model"] = _ollama.Model,
             ["prompt"] = BuildPrompt(text),
             ["stream"] = false,
-            ["format"] = InvoiceSchema,
+            ["format"] = InvoiceJsonParser.Schema,
             ["options"] = new { temperature = 0 },
         };
 
@@ -180,7 +146,7 @@ public class InvoiceController : ControllerBase
             ? responseText.GetString() ?? string.Empty
             : string.Empty;
 
-        return ParseItems(raw);
+        return InvoiceJsonParser.ParseItems(raw);
     }
 
     private static string BuildPrompt(string text)
@@ -200,59 +166,6 @@ public class InvoiceController : ControllerBase
             "Пример 2.\nТекст: саморезы 3.5 на 25, 200 штук\n" +
             "Ответ: {\"items\":[{\"raw_name\":\"саморезы 3.5 на 25\",\"quantity\":200,\"unit\":\"штук\"}]}\n\n" +
             "Текст: " + text;
-    }
-
-    private static List<ExtractedItemDto> ParseItems(string raw)
-    {
-        var json = StripFences(raw);
-
-        using var document = JsonDocument.Parse(json);
-        var root = document.RootElement;
-
-        if (root.ValueKind == JsonValueKind.Array)
-        {
-            return JsonSerializer.Deserialize<List<ExtractedItemDto>>(root.GetRawText(), ItemJsonOptions)
-                ?? [];
-        }
-
-        if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("raw_name", out _))
-        {
-            var single = JsonSerializer.Deserialize<ExtractedItemDto>(
-                root.GetRawText(), ItemJsonOptions);
-
-            return single is null ? [] : [single];
-        }
-
-        if (root.ValueKind == JsonValueKind.Object)
-        {
-            foreach (var name in ItemsPropertyNames)
-            {
-                if (root.TryGetProperty(name, out var array) && array.ValueKind == JsonValueKind.Array)
-                {
-                    return JsonSerializer.Deserialize<List<ExtractedItemDto>>(
-                        array.GetRawText(), ItemJsonOptions) ?? [];
-                }
-            }
-        }
-
-        throw new JsonException("Ожидался массив позиций.");
-    }
-
-    private static string StripFences(string raw)
-    {
-        var text = raw.Trim();
-
-        if (!text.StartsWith("```", StringComparison.Ordinal))
-        {
-            return text;
-        }
-
-        var firstLineEnd = text.IndexOf('\n');
-        var lastFence = text.LastIndexOf("```", StringComparison.Ordinal);
-
-        return firstLineEnd > 0 && lastFence > firstLineEnd
-            ? text[(firstLineEnd + 1)..lastFence].Trim()
-            : text;
     }
 
     private static ProcessedInvoiceRow Match(

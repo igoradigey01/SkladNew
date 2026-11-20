@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using SkladApi.Dtos;
 using SkladApi.Repositories;
@@ -22,6 +23,7 @@ public class КлиентController : ControllerBase
     private readonly IClientVoiceSearchService _voiceSearch;
     private readonly IAuditService _auditService;
     private readonly SkladContext _context;
+    private readonly ILogger<КлиентController> _logger;
 
     public КлиентController(
         IКлиентRepository клиентRepository,
@@ -30,7 +32,8 @@ public class КлиентController : ControllerBase
         IПринятыеДеньгиRepository принятыеДеньгиRepository,
         IClientVoiceSearchService voiceSearch,
         IAuditService auditService,
-        SkladContext context)
+        SkladContext context,
+        ILogger<КлиентController> logger)
     {
         _клиентRepository = клиентRepository;
         _меткаРасчетRepository = меткаРасчетRepository;
@@ -39,6 +42,7 @@ public class КлиентController : ControllerBase
         _voiceSearch = voiceSearch;
         _auditService = auditService;
         _context = context;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -275,6 +279,142 @@ public class КлиентController : ControllerBase
         return Ok(updated);
     }
 
+    /// <summary>
+    /// Создаёт накладную клиента: шапку и строки в одной транзакции.
+    /// </summary>
+    [HttpPost("marks/{dealId:guid}/products")]
+    public async Task<ActionResult<ОтпущенныйТоварDto>> CreateInvoice(
+        Guid dealId,
+        [FromBody] СоздатьНакладнуюDto? dto,
+        CancellationToken cancellationToken)
+    {
+        if (dto?.Строки is not { Count: > 0 })
+        {
+            return BadRequest(new { error = "Нужна хотя бы одна строка." });
+        }
+
+        if (dto.Строки.Any(row => row.Количество <= 0))
+        {
+            return BadRequest(new { error = "Количество должно быть больше нуля." });
+        }
+
+        if (dto.Строки.Any(row => row.Цена < 0))
+        {
+            return BadRequest(new { error = "Цена не может быть отрицательной." });
+        }
+
+        if (dto.Комментарий?.Length > 500)
+        {
+            return BadRequest(new { error = "Комментарий длиннее 500 символов." });
+        }
+
+        СозданиеНакладнойРезультат result;
+
+        try
+        {
+            result = await _отпущенныйТоварRepository.CreateAsync(
+                dealId,
+                dto.Дата,
+                dto.Комментарий,
+                dto.Строки,
+                cancellationToken);
+        }
+        catch (SqlException exception)
+        {
+            _logger.LogError(
+                exception,
+                "Не удалось создать накладную для сделки {DealId}",
+                dealId);
+
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { error = "База данных недоступна: проверьте SQL Server." });
+        }
+
+        return result.Статус switch
+        {
+            СозданиеНакладнойСтатус.Успех =>
+                StatusCode(StatusCodes.Status201Created, result.Накладная),
+            СозданиеНакладнойСтатус.СделкаНеНайдена => NotFound(),
+            СозданиеНакладнойСтатус.НоменклатураНеНайдена =>
+                BadRequest(new
+                {
+                    error = $"Номенклатура {result.НоменклатураId} не найдена.",
+                }),
+            СозданиеНакладнойСтатус.НетСклада => StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { error = "Склад не настроен." }),
+            _ => StatusCode(
+                StatusCodes.Status500InternalServerError,
+                new { error = "Не удалось сохранить накладную." }),
+        };
+    }
+
+    /// <summary>Принимает деньги от клиента по сделке.</summary>
+    [HttpPost("marks/{dealId:guid}/payments")]
+    public async Task<ActionResult<ПринятыеДеньгиDto>> CreatePayment(
+        Guid dealId,
+        [FromBody] СоздатьПлатежDto? dto,
+        CancellationToken cancellationToken)
+    {
+        if (dto is null)
+        {
+            return BadRequest(new { error = "Нужна сумма платежа." });
+        }
+
+        if (dto.Сумма <= 0)
+        {
+            return BadRequest(new { error = "Сумма должна быть больше нуля." });
+        }
+
+        if (dto.СпособОплаты is < 1 or > 3)
+        {
+            return BadRequest(new
+            {
+                error = "Способ оплаты: 1 — наличные, 2 — безналичный расчёт, 3 — банковская карта.",
+            });
+        }
+
+        if (dto.НомерДокумента?.Trim().Length > 30)
+        {
+            return BadRequest(new { error = "Номер документа длиннее 30 символов." });
+        }
+
+        if (dto.Комментарий?.Trim().Length > 500)
+        {
+            return BadRequest(new { error = "Комментарий длиннее 500 символов." });
+        }
+
+        СозданиеПлатежаРезультат result;
+
+        try
+        {
+            result = await _принятыеДеньгиRepository.CreateAsync(
+                dealId, dto, cancellationToken);
+        }
+        catch (SqlException exception)
+        {
+            _logger.LogError(
+                exception,
+                "Не удалось принять платёж по сделке {DealId}",
+                dealId);
+
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { error = "База данных недоступна: проверьте SQL Server." });
+        }
+
+        return result.Статус switch
+        {
+            СозданиеПлатежаСтатус.Успех =>
+                StatusCode(StatusCodes.Status201Created, result.Платеж),
+            СозданиеПлатежаСтатус.СделкаНеНайдена => NotFound(),
+            _ => StatusCode(
+                StatusCodes.Status500InternalServerError,
+                new { error = "Не удалось сохранить платёж." }),
+        };
+    }
+
     /// <summary>Меняет только сумму платежа; остальные реквизиты неизменны.</summary>
     [HttpPut("marks/{dealId:guid}/payments/{id:int}")]
     public async Task<ActionResult<ПринятыеДеньгиDto>> UpdatePayment(
@@ -334,6 +474,9 @@ public class КлиентController : ControllerBase
             Дата = old.Дата,
             Сумма = dto.Сумма,
             СделкаId = old.СделкаId,
+            СпособОплаты = old.СпособОплаты,
+            НомерДокумента = old.НомерДокумента,
+            Комментарий = old.Комментарий,
         });
     }
 

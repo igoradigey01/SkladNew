@@ -131,6 +131,26 @@ public class НоменклатураRepository : IНоменклатураRepos
         return rows.ToList();
     }
 
+    public async Task<string> GetNextCodeAsync()
+    {
+        const string sql = """
+            SELECT MAX(TRY_CAST(SUBSTRING([Код], 4, 32) AS int))
+            FROM dbo.[Номенклатура]
+            WHERE [Код] LIKE 'НМ-%'
+            """;
+
+        await using var connection = new SqlConnection(_connectionString);
+        var max = await connection.ExecuteScalarAsync<int?>(sql);
+
+        return FormatNextCode(max);
+    }
+
+    /// <summary>НМ-00001, если кодов ещё нет; иначе максимальный номер + 1.</summary>
+    public static string FormatNextCode(int? maxNumber)
+    {
+        return $"НМ-{(maxNumber ?? 0) + 1:D5}";
+    }
+
     public async Task<НоменклатураReferencesDto> GetReferencesAsync()
     {
         const string groupsSql = """
@@ -252,10 +272,14 @@ public class НоменклатураRepository : IНоменклатураRepos
                 insertNomenclatureSql,
                 new
                 {
-                    request.Код,
-                    request.Артикул,
-                    request.Название,
-                    request.КраткоеНазвание,
+                    Код = request.Код.Trim(),
+                    Артикул = string.IsNullOrWhiteSpace(request.Артикул)
+                        ? null
+                        : request.Артикул.Trim(),
+                    Название = request.Название.Trim(),
+                    КраткоеНазвание = string.IsNullOrWhiteSpace(request.КраткоеНазвание)
+                        ? null
+                        : request.КраткоеНазвание.Trim(),
                     request.ГруппаId,
                     request.КатегорияId,
                     request.ТипId,
@@ -266,7 +290,7 @@ public class НоменклатураRepository : IНоменклатураRepos
                 },
                 transaction);
 
-            foreach (var characteristic in request.Характеристики)
+            foreach (var characteristic in NormalizeCharacteristics(request.Характеристики))
             {
                 await connection.ExecuteAsync(
                     insertCharacteristicSql,
@@ -285,9 +309,42 @@ public class НоменклатураRepository : IНоменклатураRepos
         }
         catch
         {
-            await transaction.RollbackAsync();
+            // Триггер проверки значений (THROW 51002) делает ROLLBACK сам,
+            // после чего транзакция уже завершена и повторный откат бросает
+            // InvalidOperationException — он не должен скрывать исходную ошибку.
+            try
+            {
+                await transaction.RollbackAsync();
+            }
+            catch (Exception rollbackException)
+                when (rollbackException is InvalidOperationException or SqlException)
+            {
+                // Транзакция уже откачена базой.
+            }
+
             throw;
         }
+    }
+
+    /// <summary>
+    /// Пустое значение характеристики означает «не задано»: строку не пишем,
+    /// и тогда действует значение по умолчанию вида (иначе триггер
+    /// TR_ЗначениеХарактеристики_Проверка отклонит пустую строку для List).
+    /// Дубли по характеристике схлопываем: (НоменклатураId, ХарактеристикаId)
+    /// уникальны.
+    /// </summary>
+    public static IReadOnlyList<ЗначениеХарактеристикиRequest> NormalizeCharacteristics(
+        IEnumerable<ЗначениеХарактеристикиRequest> characteristics)
+    {
+        return characteristics
+            .Where(item => !string.IsNullOrWhiteSpace(item.Значение))
+            .GroupBy(item => item.ХарактеристикаId)
+            .Select(group => new ЗначениеХарактеристикиRequest
+            {
+                ХарактеристикаId = group.Key,
+                Значение = group.Last().Значение.Trim(),
+            })
+            .ToList();
     }
 
     private static string EscapeLike(string value) =>
