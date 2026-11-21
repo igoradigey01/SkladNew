@@ -33,8 +33,8 @@ public class RecognitionController : ControllerBase
     [RequestSizeLimit(MaxImageBytes + MaxAudioBytes + 1024 * 1024)]
     [RequestFormLimits(MultipartBodyLengthLimit = MaxImageBytes + MaxAudioBytes + 1024 * 1024)]
     public async Task<ActionResult<ParsedDocumentDto>> ParseInvoice(
-        [FromForm] IFormFile? image,
-        [FromForm] IFormFile? audio,
+        IFormFile? image,
+        IFormFile? audio,
         [FromForm] string? text,
         CancellationToken cancellationToken)
     {
