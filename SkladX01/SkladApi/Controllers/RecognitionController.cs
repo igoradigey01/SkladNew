@@ -38,12 +38,12 @@ public class RecognitionController : ControllerBase
         [FromForm] string? text,
         CancellationToken cancellationToken)
     {
-        if (image is null || image.Length == 0)
+        if ((image is null || image.Length == 0) && string.IsNullOrWhiteSpace(text))
         {
-            return BadRequest(new { error = "Нужен файл фото накладной." });
+            return BadRequest(new { error = "Нужен файл фото или текст приёмщика." });
         }
 
-        if (image.Length > MaxImageBytes)
+        if (image is { Length: > 0 } && image.Length > MaxImageBytes)
         {
             return StatusCode(
                 StatusCodes.Status413PayloadTooLarge,
@@ -57,7 +57,7 @@ public class RecognitionController : ControllerBase
                 new { error = $"Аудио больше {MaxAudioBytes / 1024 / 1024} МБ." });
         }
 
-        if (!IsImage(image))
+        if (image is { Length: > 0 } && !IsImage(image))
         {
             return UnsupportedMediaTypeError(
                 "Фото должно быть изображением (JPEG, PNG, WebP, HEIC).");
@@ -78,11 +78,13 @@ public class RecognitionController : ControllerBase
 
         _logger.LogInformation(
             "Распознавание: фото {ImageName} ({ImageSize} Б), аудио {AudioSize} Б, текст {TextLength} симв.",
-            image.FileName, image.Length, audio?.Length ?? 0, comment?.Length ?? 0);
+            image?.FileName ?? "нет", image?.Length ?? 0, audio?.Length ?? 0, comment?.Length ?? 0);
 
         try
         {
-            await using var imageStream = image.OpenReadStream();
+            await using var imageStream = image is { Length: > 0 }
+                ? image.OpenReadStream()
+                : null;
             await using var audioStream = audio is { Length: > 0 }
                 ? audio.OpenReadStream()
                 : null;

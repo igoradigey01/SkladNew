@@ -75,11 +75,25 @@ internal static class RecognitionPrompts
     };
 
     /// <summary>Подставляет расшифровку речи в шаблон; пустая расшифровка — «без расхождений».</summary>
-    public static string BuildUserPrompt(string? transcription)
+    public static string BuildUserPrompt(string? transcription, bool hasImage = true)
     {
         var voice = string.IsNullOrWhiteSpace(transcription)
             ? "Приёмщик комментария не оставил — всё принято по накладной, без расхождений."
             : transcription.Trim();
+
+        if (!hasImage)
+        {
+            return $""""
+                Проанализируй текст приёмщика и извлеки из него товарные позиции.
+
+                ТЕКСТ ПРИЁМЩИКА:
+                """
+                {voice}
+                """
+
+                Извлеки шапку документа (если есть) и все товарные позиции в строгом соответствии со схемой JSON. Если данные о поставщике, номере или дате отсутствуют, оставь null.
+                """";
+        }
 
         return UserTemplate.Replace("{voice_transcript}", voice, StringComparison.Ordinal);
     }

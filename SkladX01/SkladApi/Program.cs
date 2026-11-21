@@ -75,9 +75,14 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
+
 var app = builder.Build();
 
 WarnIfWhisperMissing(app);
+
+app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
 {

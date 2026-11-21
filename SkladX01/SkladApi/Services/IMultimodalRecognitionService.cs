@@ -6,11 +6,11 @@ namespace SkladApi.Services;
 public interface IMultimodalRecognitionService
 {
     /// <summary>
-    /// Читает фото накладной и возвращает шапку документа и позиции.
+    /// Читает фото накладной (или только текст) и возвращает шапку документа и позиции.
     /// Текст приёмщика берётся как есть; если его нет, а аудио передано — расшифровывает Whisper.
     /// </summary>
     Task<ParsedDocumentDto> RecognizeInvoiceAsync(
-        Stream imageStream,
+        Stream? imageStream,
         Stream? audioStream,
         string? text,
         CancellationToken cancellationToken);

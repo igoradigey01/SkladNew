@@ -553,7 +553,7 @@ public class MultimodalRecognitionTests
         : IMultimodalRecognitionService
     {
         public Task<ParsedDocumentDto> RecognizeInvoiceAsync(
-            Stream imageStream,
+            Stream? imageStream,
             Stream? audioStream,
             string? text,
             CancellationToken cancellationToken)
@@ -565,7 +565,7 @@ public class MultimodalRecognitionTests
     private sealed class ThrowingService(Exception exception) : IMultimodalRecognitionService
     {
         public Task<ParsedDocumentDto> RecognizeInvoiceAsync(
-            Stream imageStream,
+            Stream? imageStream,
             Stream? audioStream,
             string? text,
             CancellationToken cancellationToken)
@@ -581,7 +581,7 @@ public class MultimodalRecognitionTests
         public Stream? Audio { get; private set; }
 
         public Task<ParsedDocumentDto> RecognizeInvoiceAsync(
-            Stream imageStream,
+            Stream? imageStream,
             Stream? audioStream,
             string? text,
             CancellationToken cancellationToken)

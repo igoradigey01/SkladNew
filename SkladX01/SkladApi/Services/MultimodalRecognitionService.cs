@@ -36,13 +36,15 @@ public sealed class MultimodalRecognitionService : IMultimodalRecognitionService
     }
 
     public async Task<ParsedDocumentDto> RecognizeInvoiceAsync(
-        Stream imageStream,
+        Stream? imageStream,
         Stream? audioStream,
         string? text,
         CancellationToken cancellationToken)
     {
         var transcription = await ResolveTranscriptionAsync(audioStream, text, cancellationToken);
-        var imageBytes = await ReadImageAsync(imageStream, cancellationToken);
+        var imageBytes = imageStream is not null
+            ? await ReadImageAsync(imageStream, cancellationToken)
+            : null;
 
         return await AnalyzeWithOllamaAsync(imageBytes, transcription, cancellationToken);
     }
@@ -136,22 +138,28 @@ public sealed class MultimodalRecognitionService : IMultimodalRecognitionService
     }
 
     private async Task<ParsedDocumentDto> AnalyzeWithOllamaAsync(
-        byte[] imageBytes,
+        byte[]? imageBytes,
         string transcription,
         CancellationToken cancellationToken)
     {
+        var userMessage = new Dictionary<string, object?>
+        {
+            ["role"] = "user",
+            ["content"] = RecognitionPrompts.BuildUserPrompt(transcription, imageBytes is not null),
+        };
+
+        if (imageBytes is { Length: > 0 })
+        {
+            userMessage["images"] = new[] { Convert.ToBase64String(imageBytes) };
+        }
+
         var payload = new Dictionary<string, object?>
         {
             ["model"] = _ollamaSettings.Model,
             ["messages"] = new object[]
             {
                 new { role = "system", content = RecognitionPrompts.System },
-                new
-                {
-                    role = "user",
-                    content = RecognitionPrompts.BuildUserPrompt(transcription),
-                    images = new[] { Convert.ToBase64String(imageBytes) },
-                },
+                userMessage,
             },
             ["stream"] = false,
             ["format"] = RecognitionPrompts.Schema,
