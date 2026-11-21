@@ -1,18 +1,21 @@
 using System.Text.Json;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using SkladApi.Dtos;
 using SkladApi.Repositories;
-using SkladApi.Services;
 
-namespace SkladApi.Controllers;
+namespace SkladApi.Services;
 
-[ApiController]
-[Route("api/clients/voice-search")]
-public class ClientVoiceController : ControllerBase
+/// <summary>Поиск клиента по продиктованному тексту: разбор моделью + Левенштейн.</summary>
+public interface IClientVoiceSearchService
 {
+    Task<IReadOnlyList<ClientCandidate>> SearchAsync(string text, CancellationToken cancellationToken);
+}
+
+public sealed class ClientVoiceSearchService : IClientVoiceSearchService
+{
+    public const int MaxTextLength = 500;
+
     private const int MinScore = 50;
-    private const int MaxTextLength = 500;
 
     private static readonly JsonSerializerOptions ExtractOptions = new()
     {
@@ -34,13 +37,13 @@ public class ClientVoiceController : ControllerBase
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IКлиентRepository _clients;
     private readonly OllamaSettings _ollama;
-    private readonly ILogger<ClientVoiceController> _logger;
+    private readonly ILogger<ClientVoiceSearchService> _logger;
 
-    public ClientVoiceController(
+    public ClientVoiceSearchService(
         IHttpClientFactory httpClientFactory,
         IКлиентRepository clients,
         IOptions<OllamaSettings> ollama,
-        ILogger<ClientVoiceController> logger)
+        ILogger<ClientVoiceSearchService> logger)
     {
         _httpClientFactory = httpClientFactory;
         _clients = clients;
@@ -48,24 +51,10 @@ public class ClientVoiceController : ControllerBase
         _logger = logger;
     }
 
-    /// <summary>Поиск клиента по продиктованному тексту.</summary>
-    [HttpPost]
-    public async Task<ActionResult<IReadOnlyList<ClientCandidate>>> Search(
-        [FromBody] ClientVoiceQuery? query,
+    public async Task<IReadOnlyList<ClientCandidate>> SearchAsync(
+        string text,
         CancellationToken cancellationToken)
     {
-        var text = query?.RawText?.Trim();
-
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return BadRequest(new { error = "Голосовой текст пуст." });
-        }
-
-        if (text.Length > MaxTextLength)
-        {
-            return BadRequest(new { error = $"Текст длиннее {MaxTextLength} символов." });
-        }
-
         ExtractedClientQuery extracted;
 
         try
@@ -96,15 +85,13 @@ public class ClientVoiceController : ControllerBase
         var clients = await _clients.GetAllAsync(
             null, null, null, null, "alias", false, activeOnly: true);
 
-        var candidates = clients
+        return clients
             .Select(client => Score(client, extracted))
             .Where(candidate => candidate.Score >= MinScore)
             .OrderByDescending(candidate => candidate.Score)
             .ThenBy(candidate => candidate.Alias)
             .Take(10)
             .ToList();
-
-        return Ok(candidates);
     }
 
     private async Task<ExtractedClientQuery> ExtractAsync(string text, CancellationToken cancellationToken)

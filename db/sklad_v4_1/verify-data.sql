@@ -219,7 +219,42 @@ UNION ALL
 SELECT N'Сделка без клиента', 0, CAST(s.[КодСделки] AS nvarchar(36))
 FROM dbo.Сделка AS s
 LEFT JOIN dbo.Клиент AS k ON k.[Id] = s.[КлиентId]
-WHERE k.[Id] IS NULL;
+WHERE k.[Id] IS NULL
+UNION ALL
+SELECT N'Приход ссылается на несуществующую сделку поставщика', i.[Id],
+       CAST(i.[КодСделкиПоставщика] AS nvarchar(36))
+FROM dbo.Приход AS i
+LEFT JOIN dbo.СделкаПоставщика AS s ON s.[КодСделки] = i.[КодСделкиПоставщика]
+WHERE i.[КодСделкиПоставщика] IS NOT NULL AND s.[КодСделки] IS NULL
+UNION ALL
+SELECT N'Поставщик прихода <> поставщик сделки', i.[Id],
+       CAST(i.[КодСделкиПоставщика] AS nvarchar(36))
+FROM dbo.Приход AS i
+INNER JOIN dbo.СделкаПоставщика AS s ON s.[КодСделки] = i.[КодСделкиПоставщика]
+WHERE i.[ПоставщикId] <> s.[ПоставщикId]
+UNION ALL
+SELECT N'Выплата ссылается на несуществующую сделку поставщика', m.[Id],
+       CAST(m.[КодСделкиПоставщика] AS nvarchar(36))
+FROM dbo.Деньги AS m
+LEFT JOIN dbo.СделкаПоставщика AS s ON s.[КодСделки] = m.[КодСделкиПоставщика]
+WHERE m.[КодСделкиПоставщика] IS NOT NULL AND s.[КодСделки] IS NULL
+UNION ALL
+SELECT N'Контрагент выплаты <> поставщик сделки', m.[Id],
+       CAST(m.[КодСделкиПоставщика] AS nvarchar(36))
+FROM dbo.Деньги AS m
+INNER JOIN dbo.СделкаПоставщика AS s ON s.[КодСделки] = m.[КодСделкиПоставщика]
+WHERE m.[CounterpartyType] <> 2
+   OR m.[CounterpartyId] IS NULL
+   OR m.[CounterpartyId] <> s.[ПоставщикId]
+UNION ALL
+SELECT N'Платёж привязан к двум сделкам', m.[Id], N''
+FROM dbo.Деньги AS m
+WHERE m.[КодСделки] IS NOT NULL AND m.[КодСделкиПоставщика] IS NOT NULL
+UNION ALL
+SELECT N'Сделка поставщика без поставщика', 0, CAST(s.[КодСделки] AS nvarchar(36))
+FROM dbo.СделкаПоставщика AS s
+LEFT JOIN dbo.Поставщик AS p ON p.[Id] = s.[ПоставщикId]
+WHERE p.[Id] IS NULL;
 GO
 
 /* ===========================================================================

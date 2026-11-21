@@ -19,6 +19,9 @@ builder.Services.AddScoped<ICurrentUserService, HttpCurrentUserService>();
 
 builder.Services.Configure<EmailSettings>(
     builder.Configuration.GetSection(EmailSettings.SectionName));
+builder.Services.Configure<WhisperSettings>(
+    builder.Configuration.GetSection(WhisperSettings.SectionName));
+builder.Services.AddSingleton<IWhisperTranscriber, WhisperTranscriber>();
 builder.Services.AddScoped<IEmailSender, EmailSender>();
 
 builder.Services.AddScoped<IКлиентRepository, КлиентRepository>();
@@ -27,7 +30,21 @@ builder.Services.AddScoped<IОтпущенныйТоварRepository, Отпущ
 builder.Services.AddScoped<IПринятыеДеньгиRepository, ПринятыеДеньгиRepository>();
 builder.Services.AddScoped<IНоменклатураRepository, НоменклатураRepository>();
 builder.Services.AddScoped<IПоставщикRepository, ПоставщикRepository>();
+builder.Services.AddScoped<IСделкаПоставщикаRepository, СделкаПоставщикаRepository>();
+builder.Services.AddScoped<IПолученныйТоварRepository, ПолученныйТоварRepository>();
+builder.Services.AddScoped<IОтданныеДеньгиRepository, ОтданныеДеньгиRepository>();
 builder.Services.AddScoped<IСкладRepository, СкладRepository>();
+builder.Services.AddScoped<IClientVoiceSearchService, ClientVoiceSearchService>();
+builder.Services.AddHttpClient<IMultimodalRecognitionService, MultimodalRecognitionService>((services, client) =>
+{
+    var ollama = services.GetRequiredService<IOptions<OllamaSettings>>().Value;
+    client.Timeout = TimeSpan.FromSeconds(ollama.TimeoutSeconds);
+    client.BaseAddress = new Uri(ollama.BaseUrl);
+});
+
+builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+builder.Services.AddScoped<IEmployeeContext, EmployeeContext>();
+builder.Services.AddScoped<IAuditService, AuditService>();
 
 builder.Services.Configure<OllamaSettings>(
     builder.Configuration.GetSection(OllamaSettings.SectionName));
@@ -58,7 +75,14 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
+
 var app = builder.Build();
+
+WarnIfWhisperMissing(app);
+
+app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
 {
@@ -86,4 +110,25 @@ static string RequireConnection(IConfiguration configuration, string name)
     }
 
     return value;
+}
+
+static void WarnIfWhisperMissing(WebApplication app)
+{
+    var transcriber = app.Services.GetRequiredService<IWhisperTranscriber>();
+
+    if (transcriber.IsAvailable)
+    {
+        return;
+    }
+
+    var message =
+        $"Модель Whisper не найдена: {transcriber.ModelPath}. " +
+        "/api/recognition/parse будет отвечать 503.";
+
+    if (app.Configuration.GetValue<bool>("Whisper:Required"))
+    {
+        throw new InvalidOperationException(message);
+    }
+
+    app.Logger.LogWarning("{Message}", message);
 }

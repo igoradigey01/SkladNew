@@ -5,4 +5,14 @@ namespace SkladApi.Repositories;
 public interface IПринятыеДеньгиRepository
 {
     Task<IReadOnlyList<ПринятыеДеньгиDto>> GetByDealIdAsync(Guid dealId);
+
+    Task<ПринятыеДеньгиDto?> GetByIdAsync(
+        Guid dealId,
+        int paymentId,
+        CancellationToken cancellationToken = default);
+
+    Task<СозданиеПлатежаРезультат> CreateAsync(
+        Guid dealId,
+        СоздатьПлатежDto dto,
+        CancellationToken cancellationToken = default);
 }

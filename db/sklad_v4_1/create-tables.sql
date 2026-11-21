@@ -461,6 +461,11 @@ IF OBJECT_ID(N'dbo.seq_НомерСделки', N'SO') IS NULL
     CREATE SEQUENCE dbo.seq_НомерСделки AS int START WITH 1 INCREMENT BY 1;
 GO
 
+/* Нумерация сделок поставщика: P-000001, P-000002, ... */
+IF OBJECT_ID(N'dbo.seq_НомерСделкиПоставщика', N'SO') IS NULL
+    CREATE SEQUENCE dbo.seq_НомерСделкиПоставщика AS int START WITH 1 INCREMENT BY 1;
+GO
+
 CREATE TABLE dbo.Сделка
 (
     КодСделки    uniqueidentifier NOT NULL,
@@ -478,6 +483,35 @@ CREATE TABLE dbo.Сделка
     CONSTRAINT UQ_Сделка_НомерСделки UNIQUE (НомерСделки),
     CONSTRAINT FK_Сделка_Клиент FOREIGN KEY (КлиентId)
         REFERENCES dbo.Клиент (Id) ON UPDATE CASCADE ON DELETE NO ACTION
+);
+GO
+
+/* ---------------------------------------------------------------------------
+   СДЕЛКА ПОСТАВЩИКА — отдельная сущность, логически не связанная со сделками
+   клиента. Группирует приходы и выплаты поставщику (поставка).
+
+   Номер P-000001 выдаёт seq_НомерСделкиПоставщика через DEFAULT. Приход и
+   выплата ссылаются на сделку отдельной колонкой КодСделкиПоставщика, чтобы
+   не пересекаться с клиентским КодСделки.
+
+   Долг не хранится: он вычисляется в vw_БалансСделкиПоставщика.
+   ------------------------------------------------------------------------- */
+CREATE TABLE dbo.СделкаПоставщика
+(
+    КодСделки    uniqueidentifier NOT NULL,
+    НомерСделки  nvarchar(20) NOT NULL
+                 CONSTRAINT DF_СделкаПоставщика_НомерСделки
+                 DEFAULT (N'P-' + RIGHT('000000' + CAST(NEXT VALUE FOR dbo.seq_НомерСделкиПоставщика AS varchar(10)), 6)),
+    ПоставщикId  int NOT NULL,
+    Дата         datetime NOT NULL CONSTRAINT DF_СделкаПоставщика_Дата DEFAULT (GETDATE()),
+    Комментарий  nvarchar(500) NULL,
+    ДатаСоздания datetime NOT NULL CONSTRAINT DF_СделкаПоставщика_ДатаСоздания DEFAULT (GETDATE()),
+    Активна      bit NOT NULL CONSTRAINT DF_СделкаПоставщика_Активна DEFAULT (1),
+
+    CONSTRAINT PK_СделкаПоставщика PRIMARY KEY CLUSTERED (КодСделки),
+    CONSTRAINT UQ_СделкаПоставщика_НомерСделки UNIQUE (НомерСделки),
+    CONSTRAINT FK_СделкаПоставщика_Поставщик FOREIGN KEY (ПоставщикId)
+        REFERENCES dbo.Поставщик (Id) ON UPDATE CASCADE ON DELETE NO ACTION
 );
 GO
 
@@ -537,6 +571,7 @@ CREATE TABLE dbo.Приход
     Date           datetime NOT NULL,
     Type           int NOT NULL,
     ПоставщикId    int NOT NULL,
+    КодСделкиПоставщика uniqueidentifier NULL, -- поставка (сделка поставщика)
     НоменклатураId int NOT NULL,
     СкладId        int NOT NULL,
     Quantity       decimal(18, 3) NOT NULL,
@@ -548,6 +583,8 @@ CREATE TABLE dbo.Приход
     CONSTRAINT PK_Приход PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT FK_Приход_Поставщик FOREIGN KEY (ПоставщикId)
         REFERENCES dbo.Поставщик (Id) ON UPDATE CASCADE ON DELETE NO ACTION,
+    CONSTRAINT FK_Приход_СделкаПоставщика FOREIGN KEY (КодСделкиПоставщика)
+        REFERENCES dbo.СделкаПоставщика (КодСделки) ON UPDATE NO ACTION ON DELETE NO ACTION,
     CONSTRAINT FK_Приход_Номенклатура FOREIGN KEY (НоменклатураId)
         REFERENCES dbo.Номенклатура (Id) ON UPDATE CASCADE ON DELETE NO ACTION,
     CONSTRAINT FK_Приход_Склад FOREIGN KEY (СкладId)
@@ -642,6 +679,7 @@ CREATE TABLE dbo.Деньги
     CounterpartyId   int NULL,
     CounterpartyType int NOT NULL CONSTRAINT DF_Деньги_ТипКонтрагента DEFAULT (0),
     КодСделки        uniqueidentifier NULL,
+    КодСделкиПоставщика uniqueidentifier NULL,  -- выплата по поставке (сделка поставщика)
     Sum              decimal(18, 2) NOT NULL,
     PaymentMethod    int NOT NULL CONSTRAINT DF_Деньги_СпособОплаты DEFAULT (1),
     НомерДокумента   nvarchar(30) NULL,
@@ -651,6 +689,10 @@ CREATE TABLE dbo.Деньги
     CONSTRAINT PK_Деньги PRIMARY KEY CLUSTERED (Id),
     CONSTRAINT FK_Деньги_Сделка FOREIGN KEY (КодСделки)
         REFERENCES dbo.Сделка (КодСделки) ON UPDATE CASCADE ON DELETE NO ACTION,
+    CONSTRAINT FK_Деньги_СделкаПоставщика FOREIGN KEY (КодСделкиПоставщика)
+        REFERENCES dbo.СделкаПоставщика (КодСделки) ON UPDATE CASCADE ON DELETE NO ACTION,
+    CONSTRAINT CK_Деньги_ОднаСделка CHECK (
+        КодСделки IS NULL OR КодСделкиПоставщика IS NULL),
     CONSTRAINT CK_Деньги_Sum CHECK (Sum >= 0),
     -- контрагент проверяем по типу: сотрудник живёт в другой базе, поэтому
     -- для него обязателен СотрудникGuid, а CounterpartyId остаётся пустым
@@ -718,6 +760,30 @@ CREATE TABLE dbo.Расхождение
         REFERENCES dbo.Ревизия (Code) ON UPDATE CASCADE ON DELETE CASCADE,
     CONSTRAINT FK_Расхождение_Номенклатура FOREIGN KEY (НоменклатураId)
         REFERENCES dbo.Номенклатура (Id) ON UPDATE CASCADE ON DELETE NO ACTION
+);
+GO
+
+/* ---------------------------------------------------------------------------
+   ЖУРНАЛ АУДИТА
+
+   История изменений накладных и платежей. Без FK на сотрудника: Сотрудник
+   живёт в Sklad_v1_HR, поэтому Id и имя денормализованы. OldData/NewData —
+   JSON-снимки состояния до и после изменения.
+   ------------------------------------------------------------------------- */
+CREATE TABLE dbo.AuditLog
+(
+    Id                    bigint IDENTITY(1, 1) NOT NULL,
+    EntityType            nvarchar(100) NOT NULL,   -- Invoice | Payment
+    EntityId              bigint NOT NULL,
+    Action                nvarchar(20) NOT NULL,    -- Update
+    ChangedByEmployeeId   bigint NOT NULL,
+    ChangedByEmployeeName nvarchar(200) NOT NULL,
+    Timestamp             datetime2 NOT NULL
+                          CONSTRAINT DF_AuditLog_Timestamp DEFAULT (SYSUTCDATETIME()),
+    OldData               nvarchar(max) NULL,
+    NewData               nvarchar(max) NULL,
+
+    CONSTRAINT PK_AuditLog PRIMARY KEY CLUSTERED (Id)
 );
 GO
 

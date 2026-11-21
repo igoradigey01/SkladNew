@@ -1,11 +1,8 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using SkladApi.Controllers;
 using SkladApi.Dtos;
 using SkladApi.Repositories;
 using SkladApi.Services;
@@ -13,7 +10,7 @@ using Xunit;
 
 namespace SkladApi.Tests;
 
-public class ClientVoiceControllerTests
+public class ClientVoiceSearchServiceTests
 {
     private static readonly КлиентDto[] Clients =
     [
@@ -25,12 +22,9 @@ public class ClientVoiceControllerTests
     [Fact]
     public async Task Finds_client_by_extracted_name()
     {
-        var controller = Create("""{"name":"алишер белоречка","city":"","phone":""}""");
+        var service = Create("""{"name":"алишер белоречка","city":"","phone":""}""");
 
-        var result = await controller.Search(new ClientVoiceQuery { RawText = "найди клиента алишер белоречка" }, default);
-
-        var candidates = Assert.IsAssignableFrom<IReadOnlyList<ClientCandidate>>(
-            Assert.IsType<OkObjectResult>(result.Result).Value);
+        var candidates = await service.SearchAsync("найди клиента алишер белоречка", default);
 
         Assert.Equal(33, candidates[0].Id);
         Assert.Equal(100, candidates[0].Score);
@@ -40,12 +34,9 @@ public class ClientVoiceControllerTests
     [Fact]
     public async Task Finds_client_by_city_in_case()
     {
-        var controller = Create("""{"name":"","city":"Родники","phone":""}""");
+        var service = Create("""{"name":"","city":"Родники","phone":""}""");
 
-        var result = await controller.Search(new ClientVoiceQuery { RawText = "клиент из родников" }, default);
-
-        var candidates = Assert.IsAssignableFrom<IReadOnlyList<ClientCandidate>>(
-            Assert.IsType<OkObjectResult>(result.Result).Value);
+        var candidates = await service.SearchAsync("клиент из родников", default);
 
         Assert.Equal(33, candidates[0].Id);
         Assert.Equal("city", candidates[0].MatchedField);
@@ -54,14 +45,11 @@ public class ClientVoiceControllerTests
     [Fact]
     public async Task Parses_phone_spoken_as_words_when_model_returns_nothing()
     {
-        var controller = Create("""{"name":"","city":"","phone":""}""");
+        var service = Create("""{"name":"","city":"","phone":""}""");
 
-        var result = await controller.Search(
-            new ClientVoiceQuery { RawText = "восемь девять один восемь два пять ноль семь шесть семь один" },
+        var candidates = await service.SearchAsync(
+            "восемь девять один восемь два пять ноль семь шесть семь один",
             default);
-
-        var candidates = Assert.IsAssignableFrom<IReadOnlyList<ClientCandidate>>(
-            Assert.IsType<OkObjectResult>(result.Result).Value);
 
         Assert.Equal(33, candidates[0].Id);
         Assert.Equal("phone", candidates[0].MatchedField);
@@ -71,17 +59,14 @@ public class ClientVoiceControllerTests
     [Fact]
     public async Task Falls_back_to_text_search_when_model_is_down()
     {
-        var controller = Create(body: null);
+        var service = Create(body: null);
 
-        var result = await controller.Search(new ClientVoiceQuery { RawText = "алишер белоречка" }, default);
-
-        var candidates = Assert.IsAssignableFrom<IReadOnlyList<ClientCandidate>>(
-            Assert.IsType<OkObjectResult>(result.Result).Value);
+        var candidates = await service.SearchAsync("алишер белоречка", default);
 
         Assert.Equal(33, candidates[0].Id);
     }
 
-    private static ClientVoiceController Create(string? body)
+    private static ClientVoiceSearchService Create(string? body)
     {
         HttpMessageHandler handler = body is null
             ? new FailingHandler()
@@ -90,11 +75,11 @@ public class ClientVoiceControllerTests
         var factory = new StubFactory(new HttpClient(handler));
         var settings = Options.Create(new OllamaSettings { BaseUrl = "http://localhost:11434", Model = "test" });
 
-        return new ClientVoiceController(
+        return new ClientVoiceSearchService(
             factory,
             new StubClients(Clients),
             settings,
-            NullLogger<ClientVoiceController>.Instance);
+            NullLogger<ClientVoiceSearchService>.Instance);
     }
 
     private sealed class StubClients(IReadOnlyList<КлиентDto> clients) : IКлиентRepository

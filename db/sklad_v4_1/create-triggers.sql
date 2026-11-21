@@ -250,6 +250,9 @@ GO
    Платёж, привязанный к сделке, должен быть клиентским и ссылаться на
    клиента этой сделки. Возврат клиенту (OperationType = 2) тоже допустим:
    в балансе он вычитается, а не прибавляется.
+
+   Выплата по сделке поставщика проверяется отдельно: контрагент должен быть
+   поставщиком этой сделки (CounterpartyType = 2).
    ------------------------------------------------------------------------- */
 IF OBJECT_ID(N'dbo.TR_Деньги_Проверка', N'TR') IS NOT NULL
     DROP TRIGGER dbo.TR_Деньги_Проверка;
@@ -275,6 +278,53 @@ BEGIN
     BEGIN
         ROLLBACK TRANSACTION;
         THROW 51012, N'Платёж по сделке должен быть клиентским и ссылаться на клиента сделки', 1;
+    END
+
+    IF EXISTS
+    (
+        SELECT 1
+        FROM inserted AS i
+        INNER JOIN dbo.СделкаПоставщика AS s
+            ON s.КодСделки = i.КодСделкиПоставщика
+        WHERE i.CounterpartyType <> 2
+           OR i.CounterpartyId IS NULL
+           OR i.CounterpartyId <> s.ПоставщикId
+           OR i.OperationType NOT IN (1, 2, 4)
+    )
+    BEGIN
+        ROLLBACK TRANSACTION;
+        THROW 51014, N'Выплата по сделке поставщика должна ссылаться на этого поставщика', 1;
+    END
+END
+GO
+
+/* ---------------------------------------------------------------------------
+   Приход, привязанный к сделке поставщика, должен быть закупкой
+   (Type = 1) у того же поставщика.
+   ------------------------------------------------------------------------- */
+IF OBJECT_ID(N'dbo.TR_Приход_Проверка', N'TR') IS NOT NULL
+    DROP TRIGGER dbo.TR_Приход_Проверка;
+GO
+
+CREATE TRIGGER dbo.TR_Приход_Проверка
+ON dbo.Приход
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF EXISTS
+    (
+        SELECT 1
+        FROM inserted AS i
+        INNER JOIN dbo.СделкаПоставщика AS s
+            ON s.КодСделки = i.КодСделкиПоставщика
+        WHERE s.ПоставщикId <> i.ПоставщикId
+           OR i.Type <> 1
+    )
+    BEGIN
+        ROLLBACK TRANSACTION;
+        THROW 51013, N'Приход не совпадает со сделкой поставщика (поставщик или тип)', 1;
     END
 END
 GO
