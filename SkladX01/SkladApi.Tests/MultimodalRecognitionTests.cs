@@ -423,17 +423,39 @@ public class MultimodalRecognitionTests
         request = new CapturingHandler(responseBody);
         transcriber = new FakeTranscriber(transcription);
 
-        var client = new HttpClient(request)
+        var ollamaClient = new HttpClient(request)
         {
             BaseAddress = new Uri("http://10.42.0.100:11434"),
         };
 
-        var options = Options.Create(new OllamaSettings { Model = "gemma4:e4b" });
+        var local = new OllamaMultimodalProvider(
+            Options.Create(new OllamaSettings { Model = "gemma4:e4b" }),
+            ollamaClient,
+            NullLogger<OllamaMultimodalProvider>.Instance);
+
+        // Облако не настроено (нет ключа) — тесты проверяют локальную ветку.
+        var cloud = new DeepSeekMultimodalProvider(
+            Options.Create(new DeepSeekSettings { ApiKey = string.Empty }),
+            new HttpClient(new CapturingHandler(EmptyDocument()))
+            {
+                BaseAddress = new Uri("https://api.deepseek.com"),
+            },
+            NullLogger<DeepSeekMultimodalProvider>.Instance);
+
+        var routerSettings = Options.Create(new AiRouterSettings());
+
+        var router = new SmartAiRouter(
+            local,
+            cloud,
+            new LocalNodeStateTracker(),
+            new AlwaysAliveProbe(),
+            new GpuSlotLimiter(routerSettings),
+            routerSettings,
+            NullLogger<SmartAiRouter>.Instance);
 
         return new MultimodalRecognitionService(
-            options,
             transcriber,
-            client,
+            router,
             NullLogger<MultimodalRecognitionService>.Instance);
     }
 
@@ -547,6 +569,12 @@ public class MultimodalRecognitionTests
             Calls++;
             return Task.FromResult(text);
         }
+    }
+
+    private sealed class AlwaysAliveProbe : ILocalNodeHealthProbe
+    {
+        public Task<bool> IsAliveAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(true);
     }
 
     private sealed class StubRecognitionService(ParsedDocumentDto document)

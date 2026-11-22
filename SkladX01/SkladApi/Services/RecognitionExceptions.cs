@@ -11,3 +11,7 @@ public sealed class UnsupportedAudioFormatException(string message) : Exception(
 
 /// <summary>Файл не является изображением, которое можно прочитать.</summary>
 public sealed class UnsupportedImageFormatException(string message) : Exception(message);
+
+/// <summary>Ни локальная модель, ни облако не смогли обработать запрос.</summary>
+public sealed class RecognitionUnavailableException(string message, Exception? inner = null)
+    : Exception(message, inner);

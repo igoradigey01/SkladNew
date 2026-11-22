@@ -66,6 +66,45 @@ public class ClientVoiceSearchServiceTests
         Assert.Equal(33, candidates[0].Id);
     }
 
+    [Fact]
+    public async Task Uses_cloud_when_local_model_is_down()
+    {
+        var cloudBody = JsonSerializer.Serialize(new
+        {
+            choices = new[]
+            {
+                new
+                {
+                    message = new
+                    {
+                        content = """{"name":"алишер белоречка","city":"","phone":""}""",
+                    },
+                },
+            },
+        });
+
+        var factory = new NamedFactory(new Dictionary<string, HttpClient>
+        {
+            ["ollama"] = new HttpClient(new FailingHandler()),
+            ["deepseek"] = new HttpClient(new StubHandler(cloudBody))
+            {
+                BaseAddress = new Uri("https://api.deepseek.com"),
+            },
+        });
+
+        var service = new ClientVoiceSearchService(
+            factory,
+            new StubClients(Clients),
+            Options.Create(new OllamaSettings { BaseUrl = "http://localhost:11434", Model = "test" }),
+            Options.Create(new DeepSeekSettings { ApiKey = "test-key", Model = "deepseek-flash" }),
+            NullLogger<ClientVoiceSearchService>.Instance);
+
+        var candidates = await service.SearchAsync("найди клиента алишер белоречка", default);
+
+        Assert.Equal(33, candidates[0].Id);
+        Assert.Equal("alias", candidates[0].MatchedField);
+    }
+
     private static ClientVoiceSearchService Create(string? body)
     {
         HttpMessageHandler handler = body is null
@@ -79,6 +118,7 @@ public class ClientVoiceSearchServiceTests
             factory,
             new StubClients(Clients),
             settings,
+            Options.Create(new DeepSeekSettings { ApiKey = string.Empty }),
             NullLogger<ClientVoiceSearchService>.Instance);
     }
 
@@ -97,6 +137,11 @@ public class ClientVoiceSearchServiceTests
     private sealed class StubFactory(HttpClient client) : IHttpClientFactory
     {
         public HttpClient CreateClient(string name) => client;
+    }
+
+    private sealed class NamedFactory(IReadOnlyDictionary<string, HttpClient> clients) : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => clients[name];
     }
 
     private sealed class StubHandler(string body) : HttpMessageHandler

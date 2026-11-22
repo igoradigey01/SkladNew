@@ -1,3 +1,5 @@
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using SkladApi.Dtos;
@@ -37,17 +39,20 @@ public sealed class ClientVoiceSearchService : IClientVoiceSearchService
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IКлиентRepository _clients;
     private readonly OllamaSettings _ollama;
+    private readonly DeepSeekSettings _deepSeek;
     private readonly ILogger<ClientVoiceSearchService> _logger;
 
     public ClientVoiceSearchService(
         IHttpClientFactory httpClientFactory,
         IКлиентRepository clients,
         IOptions<OllamaSettings> ollama,
+        IOptions<DeepSeekSettings> deepSeek,
         ILogger<ClientVoiceSearchService> logger)
     {
         _httpClientFactory = httpClientFactory;
         _clients = clients;
         _ollama = ollama.Value;
+        _deepSeek = deepSeek.Value;
         _logger = logger;
     }
 
@@ -96,6 +101,30 @@ public sealed class ClientVoiceSearchService : IClientVoiceSearchService
 
     private async Task<ExtractedClientQuery> ExtractAsync(string text, CancellationToken cancellationToken)
     {
+        try
+        {
+            return await ExtractWithOllamaAsync(text, cancellationToken);
+        }
+        catch (Exception exception)
+            when (!cancellationToken.IsCancellationRequested
+                && exception is HttpRequestException or TaskCanceledException)
+        {
+            if (!_deepSeek.IsConfigured)
+            {
+                throw;
+            }
+
+            _logger.LogWarning(
+                exception, "Локальная модель недоступна — извлечение полей через DeepSeek");
+
+            return await ExtractWithDeepSeekAsync(text, cancellationToken);
+        }
+    }
+
+    private async Task<ExtractedClientQuery> ExtractWithOllamaAsync(
+        string text,
+        CancellationToken cancellationToken)
+    {
         var client = _httpClientFactory.CreateClient("ollama");
 
         var payload = new Dictionary<string, object?>
@@ -141,6 +170,61 @@ public sealed class ClientVoiceSearchService : IClientVoiceSearchService
             _logger.LogWarning(exception, "Модель вернула невалидный JSON для поиска клиента");
             throw;
         }
+    }
+
+    private async Task<ExtractedClientQuery> ExtractWithDeepSeekAsync(
+        string text,
+        CancellationToken cancellationToken)
+    {
+        var client = _httpClientFactory.CreateClient("deepseek");
+
+        const string systemPrompt =
+            "Ты извлекаешь поля из текста пользователя. Верни строго один JSON-объект " +
+            "с полями name, city, phone. Город — населённый пункт в именительном падеже: " +
+            "«из Родников» → «Родники». Телефон — только цифры: «восемь девять один…» → «891…». " +
+            "Если чего-то нет — пустая строка. Не придумывай данные.";
+
+        var payload = new Dictionary<string, object?>
+        {
+            ["model"] = _deepSeek.Model,
+            ["messages"] = new object[]
+            {
+                new { role = "system", content = systemPrompt },
+                new { role = "user", content = "Текст: " + text },
+            },
+            ["response_format"] = new { type = "json_object" },
+            ["max_tokens"] = 512,
+            ["temperature"] = 0,
+            ["stream"] = false,
+        };
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/chat/completions")
+        {
+            Content = JsonContent.Create(payload),
+        };
+        request.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", _deepSeek.ApiKey);
+
+        using var response = await client.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new HttpRequestException(
+                $"DeepSeek вернул {(int)response.StatusCode}: {body}");
+        }
+
+        var result = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+
+        var raw = result.TryGetProperty("choices", out var choices)
+            && choices.GetArrayLength() > 0
+            && choices[0].TryGetProperty("message", out var message)
+            && message.TryGetProperty("content", out var content)
+                ? content.GetString() ?? "{}"
+                : "{}";
+
+        return JsonSerializer.Deserialize<ExtractedClientQuery>(raw, ExtractOptions)
+            ?? new ExtractedClientQuery();
     }
 
     private static readonly HashSet<string> StopWords = new(StringComparer.Ordinal)

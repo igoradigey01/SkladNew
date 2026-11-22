@@ -1,37 +1,26 @@
-using System.Net.Http.Json;
-using System.Text.Json;
-using Microsoft.Extensions.Options;
 using SkladApi.Dtos;
 
 namespace SkladApi.Services;
 
 /// <summary>
-/// Фото накладной + текстовая подсказка приёмщика → шапка документа и позиции.
+/// Оркестратор распознавания накладной: приводит вход к «фото + текст»,
+/// затем делегирует разбор умному роутеру (локальная Ollama → облако DeepSeek).
 /// Текст приёмщика используется напрямую; устаревший аудиоканал расшифровывает
-/// локальный Whisper. Сверку «документ ↔ факт» делает мультимодальная модель
-/// в Ollama по правилам из <c>_hubx01/prompts/парсер.md</c>.
+/// локальный Whisper.
 /// </summary>
 public sealed class MultimodalRecognitionService : IMultimodalRecognitionService
 {
-    private static readonly JsonSerializerOptions DocumentJsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-    };
-
-    private readonly OllamaSettings _ollamaSettings;
     private readonly IWhisperTranscriber _transcriber;
-    private readonly HttpClient _httpClient;
+    private readonly SmartAiRouter _router;
     private readonly ILogger<MultimodalRecognitionService> _logger;
 
     public MultimodalRecognitionService(
-        IOptions<OllamaSettings> ollamaOptions,
         IWhisperTranscriber transcriber,
-        HttpClient httpClient,
+        SmartAiRouter router,
         ILogger<MultimodalRecognitionService> logger)
     {
-        _ollamaSettings = ollamaOptions.Value;
         _transcriber = transcriber;
-        _httpClient = httpClient;
+        _router = router;
         _logger = logger;
     }
 
@@ -46,7 +35,7 @@ public sealed class MultimodalRecognitionService : IMultimodalRecognitionService
             ? await ReadImageAsync(imageStream, cancellationToken)
             : null;
 
-        return await AnalyzeWithOllamaAsync(imageBytes, transcription, cancellationToken);
+        return await _router.ParseAsync(imageBytes, transcription, cancellationToken);
     }
 
     /// <summary>
@@ -135,71 +124,5 @@ public sealed class MultimodalRecognitionService : IMultimodalRecognitionService
         var header = bytes.AsSpan(0, Math.Min(bytes.Length, 32));
 
         return ImageSignature.TryIdentify(header, out _, out error);
-    }
-
-    private async Task<ParsedDocumentDto> AnalyzeWithOllamaAsync(
-        byte[]? imageBytes,
-        string transcription,
-        CancellationToken cancellationToken)
-    {
-        var userMessage = new Dictionary<string, object?>
-        {
-            ["role"] = "user",
-            ["content"] = RecognitionPrompts.BuildUserPrompt(transcription, imageBytes is not null),
-        };
-
-        if (imageBytes is { Length: > 0 })
-        {
-            userMessage["images"] = new[] { Convert.ToBase64String(imageBytes) };
-        }
-
-        var payload = new Dictionary<string, object?>
-        {
-            ["model"] = _ollamaSettings.Model,
-            ["messages"] = new object[]
-            {
-                new { role = "system", content = RecognitionPrompts.System },
-                userMessage,
-            },
-            ["stream"] = false,
-            ["format"] = RecognitionPrompts.Schema,
-            ["options"] = new { temperature = 0 },
-        };
-
-        // gemma4 по умолчанию тратит время на блок рассуждений — для разбора он не нужен.
-        if (_ollamaSettings.Model.StartsWith("gemma4", StringComparison.OrdinalIgnoreCase))
-        {
-            payload["think"] = false;
-        }
-
-        using var response = await _httpClient.PostAsJsonAsync(
-            "/api/chat", payload, cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
-            throw new HttpRequestException(
-                $"Ollama вернула {(int)response.StatusCode}: {body}");
-        }
-
-        var result = await response.Content.ReadFromJsonAsync<JsonElement>(
-            cancellationToken: cancellationToken);
-
-        var content = result.TryGetProperty("message", out var message)
-            && message.TryGetProperty("content", out var contentProperty)
-                ? contentProperty.GetString() ?? string.Empty
-                : string.Empty;
-
-        if (string.IsNullOrWhiteSpace(content))
-        {
-            throw new JsonException("Модель вернула пустой ответ.");
-        }
-
-        var document = JsonSerializer.Deserialize<ParsedDocumentDto>(content, DocumentJsonOptions)
-            ?? throw new JsonException("Модель вернула пустой документ.");
-
-        document.Items ??= [];
-
-        return document;
     }
 }

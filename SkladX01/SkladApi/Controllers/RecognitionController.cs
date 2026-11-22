@@ -109,6 +109,13 @@ public class RecognitionController : ControllerBase
             _logger.LogError(exception, "Модель Whisper недоступна");
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = exception.Message });
         }
+        catch (RecognitionUnavailableException exception)
+        {
+            _logger.LogError(exception, "Нет доступной модели распознавания");
+            return StatusCode(
+                StatusCodes.Status502BadGateway,
+                new { error = "Локальная модель и облако недоступны. Повторите позже." });
+        }
         catch (HttpRequestException exception)
         {
             _logger.LogError(exception, "Ollama недоступна");
@@ -129,6 +136,67 @@ public class RecognitionController : ControllerBase
                 StatusCodes.Status502BadGateway,
                 new { error = "ИИ вернул невалидный формат JSON. Повторите запрос." });
         }
+    }
+
+    /// <summary>
+    /// Асинхронный разбор: ставит задачу в очередь и сразу возвращает JobId.
+    /// Результат придёт по SignalR (<c>/hubs/parsing</c>, событие <c>parsingResult</c>)
+    /// в соединение, переданное в <paramref name="connectionId"/>.
+    /// Аудиоканал в асинхронном режиме не поддерживается — передавайте фото и/или текст.
+    /// </summary>
+    [HttpPost("parse-async")]
+    [RequestSizeLimit(MaxImageBytes + 1024 * 1024)]
+    [RequestFormLimits(MultipartBodyLengthLimit = MaxImageBytes + 1024 * 1024)]
+    public async Task<ActionResult> ParseInvoiceAsync(
+        IFormFile? image,
+        [FromForm] string? text,
+        [FromForm] string? connectionId,
+        [FromServices] ParsingJobQueue queue,
+        CancellationToken cancellationToken)
+    {
+        if ((image is null || image.Length == 0) && string.IsNullOrWhiteSpace(text))
+        {
+            return BadRequest(new { error = "Нужен файл фото или текст приёмщика." });
+        }
+
+        if (image is { Length: > 0 } && image.Length > MaxImageBytes)
+        {
+            return StatusCode(
+                StatusCodes.Status413PayloadTooLarge,
+                new { error = $"Фото больше {MaxImageBytes / 1024 / 1024} МБ." });
+        }
+
+        if (image is { Length: > 0 } && !IsImage(image))
+        {
+            return UnsupportedMediaTypeError("Фото должно быть изображением (JPEG, PNG, WebP).");
+        }
+
+        var comment = text?.Trim();
+
+        if (comment is { Length: > MaxTextLength })
+        {
+            return BadRequest(new { error = $"Текст длиннее {MaxTextLength} символов." });
+        }
+
+        byte[]? imageBytes = null;
+
+        if (image is { Length: > 0 })
+        {
+            using var buffer = new MemoryStream();
+            await image.CopyToAsync(buffer, cancellationToken);
+            imageBytes = buffer.ToArray();
+        }
+
+        var job = new ParsingJob(
+            Guid.NewGuid(), imageBytes, comment ?? string.Empty, connectionId?.Trim());
+
+        await queue.EnqueueAsync(job, cancellationToken);
+
+        _logger.LogInformation(
+            "Разбор поставлен в очередь {JobId}, фото {HasImage}, текст {TextLength} симв.",
+            job.Id, imageBytes is not null, comment?.Length ?? 0);
+
+        return Accepted(new { jobId = job.Id });
     }
 
     private static ObjectResult UnsupportedMediaTypeError(string error)

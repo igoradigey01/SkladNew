@@ -74,6 +74,36 @@ internal static class RecognitionPrompts
         required = new[] { "document_number", "document_date", "supplier_name", "items" },
     };
 
+    /// <summary>
+    /// Пример ответа для облачного JSON Output: DeepSeek требует слово «json»
+    /// в промте и образец структуры, иначе заменяет не-JSON пробелами.
+    /// </summary>
+    public const string JsonExample = """"
+        {
+          "document_number": "1042",
+          "document_date": "19.11.2026",
+          "supplier_name": "ООО СтройБаза",
+          "general_comment": null,
+          "items": [
+            {
+              "line_number": 1,
+              "article": null,
+              "name": "Шайба цинк 10",
+              "unit": "шт",
+              "price": 12.5,
+              "qty_doc": 10,
+              "qty_fact": 8,
+              "is_extra": false,
+              "item_comment": "две штуки брак"
+            }
+          ]
+        }
+        """";
+
+    /// <summary>System-промт для облака: те же правила + пример JSON-ответа.</summary>
+    public static string BuildCloudSystemPrompt() =>
+        $"{System}\n\nПРИМЕР JSON-ОТВЕТА:\n{JsonExample}";
+
     /// <summary>Подставляет расшифровку речи в шаблон; пустая расшифровка — «без расхождений».</summary>
     public static string BuildUserPrompt(string? transcription, bool hasImage = true)
     {
