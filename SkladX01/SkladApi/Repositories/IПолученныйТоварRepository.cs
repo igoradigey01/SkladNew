@@ -14,4 +14,12 @@ public interface IПолученныйТоварRepository
     Task<IReadOnlyList<СтрокаПриходаDto>> GetRowsAsync(
         Guid receiptId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Создаёт приходную накладную поставщика (строки в dbo.Приход).</summary>
+    Task<СозданиеПриходаРезультат> CreateAsync(
+        Guid dealId,
+        DateTime? date,
+        string? comment,
+        IReadOnlyList<СоздатьСтрокуПриходаDto> rows,
+        CancellationToken cancellationToken = default);
 }

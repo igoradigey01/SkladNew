@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using SkladApi.Dtos;
 using SkladApi.Repositories;
@@ -108,6 +109,70 @@ public class ПоставщикController : ControllerBase
         var payments = await _отданныеДеньгиRepository.GetByDealIdAsync(dealId);
 
         return Ok(payments);
+    }
+
+    /// <summary>Создаёт приходную накладную поставщика (строки в dbo.Приход).</summary>
+    [HttpPost("deals/{dealId:guid}/receipts")]
+    public async Task<ActionResult<ПолученныйТоварDto>> CreateReceipt(
+        Guid dealId,
+        [FromBody] СоздатьПриходDto? dto,
+        CancellationToken cancellationToken)
+    {
+        if (dto?.Строки is not { Count: > 0 })
+        {
+            return BadRequest(new { error = "Нужна хотя бы одна строка." });
+        }
+
+        if (dto.Строки.Any(row => row.Количество <= 0))
+        {
+            return BadRequest(new { error = "Количество должно быть больше нуля." });
+        }
+
+        if (dto.Строки.Any(row => row.Цена < 0))
+        {
+            return BadRequest(new { error = "Цена не может быть отрицательной." });
+        }
+
+        if (dto.Комментарий?.Length > 500)
+        {
+            return BadRequest(new { error = "Комментарий длиннее 500 символов." });
+        }
+
+        СозданиеПриходаРезультат result;
+
+        try
+        {
+            result = await _полученныйТоварRepository.CreateAsync(
+                dealId,
+                dto.Дата,
+                dto.Комментарий,
+                dto.Строки,
+                cancellationToken);
+        }
+        catch (SqlException exception)
+        {
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { error = "База данных недоступна: проверьте SQL Server.", detail = exception.Message });
+        }
+
+        return result.Статус switch
+        {
+            СозданиеПриходаСтатус.Успех =>
+                StatusCode(StatusCodes.Status201Created, result.Приход),
+            СозданиеПриходаСтатус.СделкаНеНайдена => NotFound(),
+            СозданиеПриходаСтатус.НоменклатураНеНайдена =>
+                BadRequest(new
+                {
+                    error = $"Номенклатура {result.НоменклатураId} не найдена.",
+                }),
+            СозданиеПриходаСтатус.НетСклада => StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { error = "Склад не настроен." }),
+            _ => StatusCode(
+                StatusCodes.Status500InternalServerError,
+                new { error = "Не удалось сохранить приход." }),
+        };
     }
 
     /// <summary>Строки приходной накладной для правки.</summary>

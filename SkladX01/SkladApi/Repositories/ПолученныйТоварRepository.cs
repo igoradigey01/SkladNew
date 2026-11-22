@@ -99,4 +99,131 @@ public class ПолученныйТоварRepository : IПолученныйТ�
 
         return rows.ToList();
     }
+
+    public async Task<СозданиеПриходаРезультат> CreateAsync(
+        Guid dealId,
+        DateTime? date,
+        string? comment,
+        IReadOnlyList<СоздатьСтрокуПриходаDto> rows,
+        CancellationToken cancellationToken = default)
+    {
+        var дата = date ?? DateTime.Now;
+        var uetr = Guid.NewGuid();
+        var комментарий = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
+
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            var поставщикId = await connection.QueryFirstOrDefaultAsync<int?>(
+                new CommandDefinition(
+                    "SELECT [ПоставщикId] FROM dbo.[СделкаПоставщика] WHERE [КодСделки] = @dealId",
+                    new { dealId },
+                    transaction,
+                    cancellationToken: cancellationToken));
+
+            if (поставщикId is null)
+            {
+                return new СозданиеПриходаРезультат(
+                    СозданиеПриходаСтатус.СделкаНеНайдена);
+            }
+
+            var warehouseId = await connection.QueryFirstOrDefaultAsync<int?>(
+                new CommandDefinition(
+                    "SELECT TOP 1 [Id] FROM dbo.[Склад] ORDER BY [Id]",
+                    transaction: transaction,
+                    cancellationToken: cancellationToken));
+
+            if (warehouseId is null)
+            {
+                return new СозданиеПриходаРезультат(
+                    СозданиеПриходаСтатус.НетСклада);
+            }
+
+            var ids = rows
+                .Select(row => row.НоменклатураId)
+                .Distinct()
+                .ToArray();
+
+            var existing = (await connection.QueryAsync<int>(
+                new CommandDefinition(
+                    "SELECT [Id] FROM dbo.[Номенклатура] WHERE [Id] IN @ids",
+                    new { ids },
+                    transaction,
+                    cancellationToken: cancellationToken))).ToHashSet();
+
+            var missing = ids
+                .Where(id => !existing.Contains(id))
+                .Select(id => (int?)id)
+                .FirstOrDefault();
+
+            if (missing is not null)
+            {
+                return new СозданиеПриходаРезультат(
+                    СозданиеПриходаСтатус.НоменклатураНеНайдена,
+                    НоменклатураId: missing);
+            }
+
+            var lines = rows.Select(row => new
+            {
+                row.НоменклатураId,
+                row.Количество,
+                row.Цена,
+                Sum = Math.Round(
+                    row.Количество * row.Цена, 2, MidpointRounding.AwayFromZero),
+            }).ToArray();
+
+            // Тип 1 (закупка) обязателен: TR_Приход_Проверка сверяет Type и ПоставщикId.
+            await connection.ExecuteAsync(
+                new CommandDefinition(
+                    """
+                    INSERT INTO dbo.[Приход]
+                        ([UETR], [Date], [Type], [ПоставщикId], [КодСделкиПоставщика],
+                         [НоменклатураId], [СкладId], [Quantity], [Price], [Sum], [Comment])
+                    VALUES
+                        (@uetr, @дата, 1, @поставщикId, @dealId,
+                         @НоменклатураId, @warehouseId, @Количество, @Цена, @Sum, @комментарий)
+                    """,
+                    lines.Select(line => new
+                    {
+                        uetr,
+                        дата,
+                        поставщикId,
+                        dealId,
+                        warehouseId,
+                        line.НоменклатураId,
+                        line.Количество,
+                        line.Цена,
+                        line.Sum,
+                        комментарий,
+                    }),
+                    transaction,
+                    cancellationToken: cancellationToken));
+
+            var сумма = Math.Round(
+                lines.Sum(line => line.Sum), 2, MidpointRounding.AwayFromZero);
+
+            await transaction.CommitAsync(cancellationToken);
+
+            return new СозданиеПриходаРезультат(
+                СозданиеПриходаСтатус.Успех,
+                new ПолученныйТоварDto
+                {
+                    Id = uetr,
+                    Номер = "П-" + uetr.ToString("N")[^6..].ToUpperInvariant(),
+                    Дата = дата,
+                    Сумма = сумма,
+                    СделкаId = dealId,
+                    AuditId = 0,
+                    Изменялась = false,
+                });
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            throw;
+        }
+    }
 }
