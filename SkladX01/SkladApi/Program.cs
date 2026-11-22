@@ -1,9 +1,11 @@
 using EmailService;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Http.Resilience;
 using HRDB.Data;
 using HRDB.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Polly;
 using SkladApi.Repositories;
 using SkladApi.Services;
 using SkladDB.Data;
@@ -35,12 +37,67 @@ builder.Services.AddScoped<IПолученныйТоварRepository, Получ
 builder.Services.AddScoped<IОтданныеДеньгиRepository, ОтданныеДеньгиRepository>();
 builder.Services.AddScoped<IСкладRepository, СкладRepository>();
 builder.Services.AddScoped<IClientVoiceSearchService, ClientVoiceSearchService>();
-builder.Services.AddHttpClient<IMultimodalRecognitionService, MultimodalRecognitionService>((services, client) =>
+builder.Services.Configure<DeepSeekSettings>(
+    builder.Configuration.GetSection(DeepSeekSettings.SectionName));
+builder.Services.Configure<AiRouterSettings>(
+    builder.Configuration.GetSection(AiRouterSettings.SectionName));
+
+builder.Services.AddSingleton<LocalNodeStateTracker>();
+builder.Services.AddSingleton<GpuSlotLimiter>();
+
+// Локальный провайдер Ollama: Circuit Breaker + таймаут генерации.
+builder.Services.AddHttpClient<OllamaMultimodalProvider>((services, client) =>
 {
     var ollama = services.GetRequiredService<IOptions<OllamaSettings>>().Value;
-    client.Timeout = TimeSpan.FromSeconds(ollama.TimeoutSeconds);
     client.BaseAddress = new Uri(ollama.BaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(ollama.TimeoutSeconds);
+})
+.AddResilienceHandler("local-ai", pipeline =>
+{
+    pipeline.AddCircuitBreaker(new HttpCircuitBreakerStrategyOptions
+    {
+        SamplingDuration = TimeSpan.FromSeconds(60),
+        FailureRatio = 0.5,
+        MinimumThroughput = 2,
+        BreakDuration = TimeSpan.FromSeconds(30),
+    });
+    pipeline.AddTimeout(TimeSpan.FromSeconds(20));
 });
+
+builder.Services.AddTransient<ILocalAiProvider>(
+    services => services.GetRequiredService<OllamaMultimodalProvider>());
+
+// Быстрый зонд живости Ollama (600 мс).
+builder.Services.AddHttpClient<OllamaHealthProbe>((services, client) =>
+{
+    var ollama = services.GetRequiredService<IOptions<OllamaSettings>>().Value;
+    client.BaseAddress = new Uri(ollama.BaseUrl);
+    client.Timeout = TimeSpan.FromMilliseconds(600);
+});
+
+builder.Services.AddTransient<ILocalNodeHealthProbe>(
+    services => services.GetRequiredService<OllamaHealthProbe>());
+
+// Облачный провайдер DeepSeek Flash (vision + JSON Output).
+builder.Services.AddHttpClient<DeepSeekMultimodalProvider>((services, client) =>
+{
+    var deepSeek = services.GetRequiredService<IOptions<DeepSeekSettings>>().Value;
+    client.BaseAddress = new Uri(deepSeek.BaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(deepSeek.TimeoutSeconds);
+})
+.AddStandardResilienceHandler(options =>
+{
+    options.Retry.MaxRetryAttempts = 1;
+    options.Retry.DisableForUnsafeHttpMethods();
+    options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(25);
+    options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(60);
+});
+
+builder.Services.AddTransient<ICloudAiProvider>(
+    services => services.GetRequiredService<DeepSeekMultimodalProvider>());
+
+builder.Services.AddScoped<SmartAiRouter>();
+builder.Services.AddScoped<IMultimodalRecognitionService, MultimodalRecognitionService>();
 
 builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 builder.Services.AddScoped<IEmployeeContext, EmployeeContext>();
@@ -55,6 +112,13 @@ builder.Services.AddHttpClient("ollama", (services, client) =>
 {
     var ollama = services.GetRequiredService<IOptions<OllamaSettings>>().Value;
     client.Timeout = TimeSpan.FromSeconds(ollama.TimeoutSeconds);
+});
+
+builder.Services.AddHttpClient("deepseek", (services, client) =>
+{
+    var deepSeek = services.GetRequiredService<IOptions<DeepSeekSettings>>().Value;
+    client.BaseAddress = new Uri(deepSeek.BaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(deepSeek.TimeoutSeconds);
 });
 
 builder.Services.AddDbContext<HRContext>(options =>

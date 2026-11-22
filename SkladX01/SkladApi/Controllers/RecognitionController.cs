@@ -109,6 +109,13 @@ public class RecognitionController : ControllerBase
             _logger.LogError(exception, "Модель Whisper недоступна");
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = exception.Message });
         }
+        catch (RecognitionUnavailableException exception)
+        {
+            _logger.LogError(exception, "Нет доступной модели распознавания");
+            return StatusCode(
+                StatusCodes.Status502BadGateway,
+                new { error = "Локальная модель и облако недоступны. Повторите позже." });
+        }
         catch (HttpRequestException exception)
         {
             _logger.LogError(exception, "Ollama недоступна");
