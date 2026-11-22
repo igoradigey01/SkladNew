@@ -6,6 +6,7 @@ using HRDB.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Polly;
+using SkladApi.Hubs;
 using SkladApi.Repositories;
 using SkladApi.Services;
 using SkladDB.Data;
@@ -99,6 +100,11 @@ builder.Services.AddTransient<ICloudAiProvider>(
 builder.Services.AddScoped<SmartAiRouter>();
 builder.Services.AddScoped<IMultimodalRecognitionService, MultimodalRecognitionService>();
 
+// Асинхронная очередь тяжёлых файлов + SignalR-пуш результата.
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<ParsingJobQueue>();
+builder.Services.AddHostedService<ParsingQueueWorker>();
+
 builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 builder.Services.AddScoped<IEmployeeContext, EmployeeContext>();
 builder.Services.AddScoped<IAuditService, AuditService>();
@@ -159,6 +165,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<ParsingHub>("/hubs/parsing");
 
 app.Run();
 
