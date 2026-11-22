@@ -400,6 +400,19 @@ public class SupplierDealsEndpointTests
             LastReceiptId = receiptId;
             return Task.FromResult(Rows);
         }
+
+        public Task<СозданиеПриходаРезультат> CreateAsync(
+            Guid dealId,
+            DateTime? date,
+            string? comment,
+            IReadOnlyList<СоздатьСтрокуПриходаDto> rows,
+            CancellationToken cancellationToken = default)
+        {
+            LastDealId = dealId;
+
+            return Task.FromResult(
+                new СозданиеПриходаРезультат(СозданиеПриходаСтатус.Успех));
+        }
     }
 
     private sealed class StubSupplierPaymentsRepository : IОтданныеДеньгиRepository
